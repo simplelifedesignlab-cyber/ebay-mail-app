@@ -307,6 +307,20 @@
     if (!hit) state.threads.forEach(function (t) { if (!hit && (t.msgs || []).some(function (x) { return String(x.id) === m; })) hit = t; });
     return hit;
   }
+  // 会話を引く前に、端末が持つ会話の控え (state) を用意する。画面は localStorage の前回の控えで先に描くので、GAS の最初の state が返る前に
+  // 会話を開いて Re:translation などを押すと state が空 = 「その会話が見つかりません」になった (2026-10-22)。ZBook は毎回サーバーから引くので起きない。
+  // 空なら取る・有っても mid が無ければ 1 回だけ取り直す (取り込みで会話が増えた直後)。取れなかった時は元の「見つかりません」のまま
+  var stateP = null;
+  function refetchState() {
+    if (!stateP) stateP = gasOk('state', { fresh: false }).then(function (r) { adopt(r); stateP = null; }, function (e) { stateP = null; throw e; });
+    return stateP;
+  }
+  function warm(mid) {
+    return load().then(function () {
+      if (state && findThread(mid)) return;
+      return refetchState().then(function () { }, function () { /* 取れなければ今ある控えのまま探す */ });
+    });
+  }
   function needThread(mid) {
     var t = findThread(mid);
     if (!t) throw new Error('その会話が見つかりません');
@@ -710,7 +724,7 @@
   }
   // /api/item-offer-guess: 行の特定と出品価格は GAS (item_guess)。会話は端末にあるので、買い手のオファー額の拾い出しと割引率はここ。読むだけ
   function itemGuess(b) {
-    return load().then(function () {
+    return warm(b.mid).then(function () {
       var t = findThread(b.mid);
       if (!t) return { ok: false, message: 'その会話が見つかりません' };
       return gas('item_guess', { item_id: t.item_id, item_title: t.item_title || t.title || '', price: t.price || '', row: b.row }).then(function (g) {
@@ -729,7 +743,7 @@
   }
   // /api/retranslate (Re:translation): 開いている会話の買い手・自分の通だけを Sonnet で訳し直して端末の訳に上書きする
   function retranslate(mid) {
-    return load().then(function () {
+    return warm(mid).then(function () {
       var t = findThread(mid);
       if (!t) return { ok: false, message: 'その会話が見つかりません' };
       if (!hasClaude()) throw new Error('Settings に Claude キーを入れてください');
@@ -805,10 +819,10 @@
     if (p === '/api/bark-kind') return gasOk('bark_kind', { kind: b.kind, on: b.on === true });
     if (p === '/api/done') return gas('done', { mid: b.mid }).then(function (j) { if (j.ok && state) { var t = findThread(b.mid); if (t) t.open = false; bump(); } return j; });
     if (p === '/api/send') return send(b);
-    if (p === '/api/ai-options') return viaTark('ai_options', { mid: b.mid, memo: b.memo }, function () { return aiOptions(b.mid, b.memo); });
-    if (p === '/api/ai-draft') return viaTark('ai_draft', { mid: b.mid, memo: b.memo, option: b.option, extra: b.extra }, function () { return aiDraft(b.mid, b.memo, b.option, b.extra); });
-    if (p === '/api/ai-rewrite') return viaTark('ai_rewrite', { mid: b.mid, ja: b.ja, option: b.option }, function () { return aiRewrite(b.mid, b.ja, b.option); });
-    if (p === '/api/translate') return viaTark('ai_translate', { mid: b.mid, ja: b.ja }, function () { return aiTranslate(b.mid, b.ja); }, true);
+    if (p === '/api/ai-options') return viaTark('ai_options', { mid: b.mid, memo: b.memo }, function () { return warm(b.mid).then(function () { return aiOptions(b.mid, b.memo); }); });
+    if (p === '/api/ai-draft') return viaTark('ai_draft', { mid: b.mid, memo: b.memo, option: b.option, extra: b.extra }, function () { return warm(b.mid).then(function () { return aiDraft(b.mid, b.memo, b.option, b.extra); }); });
+    if (p === '/api/ai-rewrite') return viaTark('ai_rewrite', { mid: b.mid, ja: b.ja, option: b.option }, function () { return warm(b.mid).then(function () { return aiRewrite(b.mid, b.ja, b.option); }); });
+    if (p === '/api/translate') return viaTark('ai_translate', { mid: b.mid, ja: b.ja }, function () { return warm(b.mid).then(function () { return aiTranslate(b.mid, b.ja); }); }, true);
     if (p === '/api/ledger') return ledgerRecord(b);
     if (p === '/api/offer-url') return gas('offer_url', { mid: b.mid, itemId: b.itemId, buyer: b.buyer });
     if (p === '/api/mail-read') {
