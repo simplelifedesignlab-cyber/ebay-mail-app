@@ -797,10 +797,12 @@
     if (method === 'GET' && p === '/api/cpass-track') return cpassTrack(queryOf(path, 'oc'));
     if (method === 'GET' && p === '/api/oc-track') return gasOk('oc_track', { n: queryOf(path, 'n') });
     if (method === 'GET' && p === '/api/sales-cands') return gasOk('sales_cands', { q: queryOf(path, 'q') });
+    if (method === 'GET' && p === '/api/bark-kinds') return gasOk('bark_kinds');   // 通知のベル (app.js の PushUi・GAS_MODE): Bark の種類 (mail / sales) ごとの入切を GAS から読む
     if (method === 'GET' && p === '/api/items') return itemGet('items', { q: queryOf(path, 'q') });
     if (method === 'GET' && p === '/api/item') return itemGet('item', { id: queryOf(path, 'id'), row: queryOf(path, 'row') });
     if (method === 'GET' && p === '/api/item-supplier') return gasOk('item_supplier', { id: queryOf(path, 'id') });
     if (method !== 'POST') return unsupported(path);
+    if (p === '/api/bark-kind') return gasOk('bark_kind', { kind: b.kind, on: b.on === true });
     if (p === '/api/done') return gas('done', { mid: b.mid }).then(function (j) { if (j.ok && state) { var t = findThread(b.mid); if (t) t.open = false; bump(); } return j; });
     if (p === '/api/send') return send(b);
     if (p === '/api/ai-options') return viaTark('ai_options', { mid: b.mid, memo: b.memo }, function () { return aiOptions(b.mid, b.memo); });

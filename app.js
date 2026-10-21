@@ -261,7 +261,7 @@ function startClient(DATA) {
     bAi.onclick = function () { filter = filter === 'ai' ? 'all' : 'ai'; renderList(); };   // AI が対応中の会話だけ ⇄ すべて
     bar.appendChild(lm); bar.appendChild(bAi); bar.appendChild(rf);   // 配布版でも出す (第 4 段 a): 自動返信は第 4 段 b なので、今は AI 対応の会話が無い = 空の一覧になるだけ
     root.appendChild(bar);
-    if (!GAS_MODE) pushButton(bar, rf);                                              // 配布版には通知 (Web Push) が無い
+    pushButton(bar, rf);                                                             // 配布版 (GAS_MODE) のベルは Bark の入切 (PushUi の中)
     var rows = el('div'); rows.id = 'rows'; root.appendChild(rows);
     renderRows();
   }
@@ -1003,11 +1003,12 @@ var PushUi = (function () {
   var KIND_ICON = { mail: BELL, sales: BELL, late: BELL, thanks: '<path d="M12 20s-7-4.4-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5C19 15.6 12 20 12 20z"@/>',
     ship: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"@/><path d="M4 8l8 4 8-4M12 12v8"/>' };   // @ = 入の時に塗る場所
   var S = { sub: null, kinds: { mail: false, sales: false, thanks: false, ship: false, late: false }, loaded: null }, draws = [];
-  function supported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function supported() { return GAS_MODE || 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
   function msg(e) { return e && e.message ? e.message : String(e); }
   function redraw() { draws = draws.filter(function (d) { return d.btn.isConnected; }); draws.forEach(function (d) { d.draw(); }); }
   function load() {
     if (S.loaded) return S.loaded;                    // 同じ約束を返す (ベルを呼んだ順に並ぶ)
+    if (GAS_MODE) return S.loaded = apiCall('GET', '/api/bark-kinds').then(function (r) { S.sub = true; S.kinds = r.kinds; });   // 配布版: ブラウザの購読は無い。GAS の Bark の種類ごとの入切 (mail / sales)
     return S.loaded = navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
       S.sub = sub;
       return sub ? apiCall('POST', '/api/push-state', { endpoint: sub.endpoint }).then(function (r) { S.kinds = r.kinds; }) : null;
@@ -1019,6 +1020,7 @@ var PushUi = (function () {
     return key;
   }
   function turnOn(kind) {
+    if (GAS_MODE) return apiCall('POST', '/api/bark-kind', { kind: kind, on: true }).then(function (r) { S.kinds = r.kinds; });
     var made = null;
     return Notification.requestPermission().then(function (p) {
       if (p !== 'granted') throw new Error('通知が許可されませんでした');
@@ -1034,6 +1036,7 @@ var PushUi = (function () {
     });
   }
   function turnOff(kind) {
+    if (GAS_MODE) return apiCall('POST', '/api/bark-kind', { kind: kind, on: false }).then(function (r) { S.kinds = r.kinds; });
     var sub = S.sub;
     return apiCall('POST', '/api/push-kind', { subscription: sub.toJSON(), kind: kind, on: false }).then(function (r) {
       S.kinds = r.kinds;
@@ -2677,7 +2680,7 @@ var SalesUi = (function () {
     bar.appendChild(lm);
     bar.appendChild(rf);
     root.appendChild(bar);
-    if (!GAS_MODE) ['sales', 'thanks', 'ship'].forEach(function (k) {   // 配布版には通知 (Web Push) が無い
+    (GAS_MODE ? ['sales'] : ['sales', 'thanks', 'ship']).forEach(function (k) {   // 配布版の Bark は売れた知らせ (sales) だけ
       PushUi.bell(k, bar, rf, function (t) { var x = $('saleLm'); if (x) x.textContent = t; });
     });
     var rows = el('div'); rows.id = 'saleRows'; root.appendChild(rows);
