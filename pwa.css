@@ -1,0 +1,11 @@
+/* 設定画面 (tools/mail-pwa-shim.js)。画面本体の app.css は ZBook の物をそのまま使うので、足す分はここだけ */
+.mgov{position:fixed;inset:0;z-index:99;background:#fff;display:flex;align-items:flex-start;justify-content:center;padding:calc(24px + env(safe-area-inset-top)) 24px 24px;overflow-y:auto;-webkit-overflow-scrolling:touch;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;color:#111}
+.mgov .box{width:100%;max-width:420px}
+.mgov h1{font-size:18px;margin:0 0 8px}
+.mgov p{margin:0 0 12px;color:#555;font-size:13px}
+.mgov p.bad{color:#c0392b}
+.mgov hr{border:0;border-top:1px solid #ddd;margin:14px 0}
+.mgov label{display:block;font-size:13px;color:#555;margin:6px 0 2px}
+.mgov input{width:100%;box-sizing:border-box;font-size:16px;padding:10px 12px;border:1px solid #bbb;border-radius:8px;margin-bottom:10px}
+.mgov button{width:100%;margin-bottom:8px;font-size:16px;padding:10px;border:0;border-radius:8px;background:#0a84ff;color:#fff}
+.mgov button.sub{background:#eee;color:#111}

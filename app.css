@@ -1,0 +1,368 @@
+:root{--red:#e53238;--blue:#0064d2;--ink:#191919;--mut:#707070;--line:#ececec}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Segoe UI",sans-serif;color:var(--ink);background:#fff;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+#listView{max-width:640px;margin:0 auto;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
+.hd{padding:18px 16px 4px}.hd h1{margin:0;font-weight:700}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%}.dot.r{background:var(--red)}.dot.b{background:var(--blue)}
+.row{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer}.row:active{background:#f6f6f6}
+.pic{width:56px;height:56px;border-radius:10px;flex:none;object-fit:cover;background:#f1f1f1}
+.ini{width:56px;height:56px;border-radius:50%;flex:none;background:#e3e6ea;color:#555;display:flex;align-items:center;justify-content:center;font-weight:600}
+.rt{flex:1;min-width:0}.l1{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt{color:var(--mut);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.due{font-weight:700}.due.r{color:#b42318}.due.o{color:#b54708}.due.g{color:var(--mut);font-weight:400}
+.l2,.l3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.l2{color:var(--mut)}.l3{color:#333}.row.open .tdt{font-weight:600}
+.sti{flex:none;display:flex;align-items:center;gap:5px}.sti span{display:flex}
+.sti svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.sti .g,.rb{color:#1a8f3c}.sti .x{color:#b3b3b3}
+.nm{min-width:0}.rb{flex:none;margin-right:auto;font-weight:700;white-space:nowrap}
+.sr{padding:2px 16px 8px}.sr input{width:100%;height:44px;border:1px solid #8f8f8f;border-radius:999px;padding:0 18px;font:inherit;background:#f7f7f7}
+.bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:2px 16px 8px}.bar .lm{flex:1;color:var(--mut);text-align:right}
+.bar button{width:40px;height:40px;border-radius:50%;border:0;background:#f1f1f1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}.bar button:disabled{opacity:.35;cursor:not-allowed}
+.bar svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* Chat の AI Chat ボタン (2026-10-14): 丸いボタンの列の中の文字のボタン。押している間は黒 */
+.bar button.aibtn{width:auto;padding:0 16px;border-radius:999px;font-weight:700;white-space:nowrap}.bar button.aibtn.on{background:#111;color:#fff}
+.none{padding:40px 16px;text-align:center;color:var(--mut);}
+.thr{position:fixed;inset:0;display:flex;flex-direction:column;background:#fff;z-index:5}.thr[hidden]{display:none}
+.top{display:flex;align-items:center;gap:4px;padding:8px 8px;border-bottom:1px solid var(--line);padding-top:calc(8px + env(safe-area-inset-top))}
+.back{border:0;background:none;line-height:1;padding:0 12px 4px;cursor:pointer}.top .who{color:inherit;text-decoration:none;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scr{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 16px;max-width:640px;width:100%;margin:0 auto}
+.card{display:flex;gap:12px;border:1px solid #dcdcdc;border-radius:12px;padding:10px;color:inherit;text-decoration:none;margin-bottom:6px}
+.card .pic,.card .ini{width:56px;height:56px;border-radius:8px}.card .ct{line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .pr{font-weight:700;margin-top:3px;}.card .id{color:var(--mut)}
+.day{text-align:center;color:var(--mut);margin:16px 0 8px}
+.ord{margin:2px 0 0;color:var(--mut)}
+.ocard{display:block;color:var(--ink)}.ocard .oh{display:flex;justify-content:space-between;gap:8px;font-weight:700;}.ocard .oh span:last-child{font-weight:400;color:var(--mut)}
+.m{display:flex;gap:8px;margin:6px 0;align-items:flex-end}.m.me{justify-content:flex-end}
+.av{width:30px;height:30px;border-radius:50%;background:#e3e6ea;color:#555;display:flex;align-items:center;justify-content:center;font-weight:600;flex:none}
+.col{max-width:78%;display:flex;flex-direction:column}.m.me .col{align-items:flex-end}
+.bub{padding:10px 14px;border-radius:18px;line-height:1.45;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.mimg{display:block;margin-top:6px}.mimg img{display:block;max-width:220px;max-height:260px;border-radius:12px;border:1px solid #d6d6d6}
+.m.b .bub{background:#fff;border:1px solid #d6d6d6;border-bottom-left-radius:6px}.m.me .bub{background:#e8e8e8;border-bottom-right-radius:6px}
+.ja{color:#6a6a6a;margin:4px 4px 0;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.bub .jt{color:#111;line-height:1.5}.bub .org{color:#8a8a8a;line-height:1.4;margin-top:6px;padding-top:5px;border-top:1px solid rgba(0,0,0,.08)}
+.tm{color:#9a9a9a;margin:3px 4px 0}
+.info{margin:14px 0 4px;color:var(--mut)}.info .chip{display:inline-block;background:#f1f1f1;border-radius:999px;padding:2px 9px;margin-right:6px}
+#mailStatus{position:fixed;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:5;margin:0}
+.unum .upf{font-weight:700}.unum .ush svg{width:15px;height:15px;vertical-align:-2px;margin-right:2px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}.unum .ush.ok,.unum .upf.ok,.unum .udf.ok{color:#1a8f3c}.unum .upf.ng,.unum .udf.ng{color:#b42318}
+.fl{margin:8px 0;color:#b42318;background:#fff6f5;border:1px solid #f3c6c2;border-radius:8px;padding:6px 10px}
+details{margin:6px 0;color:var(--mut)}summary{cursor:pointer}.ex{border-top:1px dashed #ddd;padding:6px 0;white-space:pre-wrap;word-break:break-word}
+.cmp{border-top:1px solid var(--line);background:#fff;padding:8px 12px calc(10px + env(safe-area-inset-bottom))}.cmp .in{max-width:640px;margin:0 auto}
+.cmp textarea{width:100%;min-height:45vh;border:1px solid #cfcfcf;border-radius:14px;padding:10px 12px;font:inherit;resize:vertical;background:#fafafa}
+.cmp textarea.warn{border-color:var(--red);background:#fff8f7}
+.btns{display:flex;gap:8px;margin-top:8px}.btns button{height:44px;border-radius:999px;padding:0 16px;font-weight:700;border:0;background:#E9E9EB;color:#333;cursor:pointer}
+.btns button.send{flex:1;background:#DCE5FD;color:#1F3FA8}.btns button.f-rg{flex:1;background:#D97757;color:#111}.btns button:disabled{opacity:.4;cursor:not-allowed}
+.msg{min-height:16px;margin-top:4px}.msg.ng{color:#b42318}.msg.ok{color:#1a7f37}
+.shb{display:inline-block;border-radius:3px;padding:0 4px;line-height:1.35;font-size:.85em;white-space:nowrap}.shb.exp{background:#2e9e4f;color:#fff}.shb.oth{background:#9fdcf5;color:#000}.shb.eco{background:#ff9f43;color:#000}.shb.cxl{background:#000;color:#fff}.shb.ret{background:#d93025;color:#fff}.shb.prt{background:#0b3d91;color:#fff}
+.aib{display:inline-block;background:var(--red);color:#fff;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.top .aib{margin-left:auto;margin-right:8px}
+.top .tblk{margin-left:auto;margin-right:8px;flex:none;height:32px;border:0;border-radius:999px;padding:0 14px;background:#111;color:#fff;font-weight:700;cursor:pointer}.top .aib+.tblk{margin-left:0}
+.cmp{max-height:88vh;overflow-y:auto}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.tools button{height:44px;border:0;border-radius:999px;padding:0;font-weight:700;cursor:pointer}.tools .t-ai{background:#D97757;color:#111}.tools .t-ty{background:#3665F3;color:#fff}.tools .t-tp{background:#BFE8CC;color:#14532D}.tools .t-of{background:#FDE68A;color:#5A3A0A}
+.tools .tyrow{grid-column:1/-1;display:flex;gap:8px}.tools .tyrow .t-ty{flex:1;min-width:0}.tools .tyrow .t-ad,.tools .tyrow .t-sp{flex:none;width:44px;display:flex;align-items:center;justify-content:center}
+.tools .t-ad{background:#E9E9EB;color:#333;font-weight:400;line-height:1}.tools .t-rt{background:#E9E9EB;color:#333}.tools .t-sp{background:#DCE5FD;color:#1F3FA8}.tools button:disabled{opacity:.4;cursor:not-allowed}
+.tools svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.thumbs{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 10px}.thumbs:empty{display:none}.th{position:relative;width:56px;height:56px}.th img{width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid #d6d6d6}
+.th button{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:0;background:#111;color:#fff;line-height:1;padding:0;cursor:pointer}
+.cmp textarea[hidden],.btns[hidden],.msg[hidden]{display:none}
+.panel{border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;max-height:34vh;overflow-y:auto;background:#fafafa}.panel[hidden]{display:none}
+.ph{color:var(--mut);margin:4px 2px 6px}.kind{color:var(--mut);margin:8px 2px 2px;font-weight:700}
+.opt{display:block;width:100%;text-align:left;border:1px solid #d6d6d6;background:#fff;border-radius:10px;padding:9px 12px;margin:4px 0;cursor:pointer}
+.opt b{display:block}.opt span{display:block;color:#555;margin-top:2px}.opt.cancel{text-align:center;height:44px;padding:0;border:0;border-radius:999px;background:#FBE0E0;color:#9B1C1C;font-weight:700}
+.opt.tpl{display:flex;align-items:center;gap:10px}.opt.tpl b{flex:none;max-width:48%}.opt.tpl span{flex:1;min-width:0;margin-top:0;line-height:1.35;color:#444}
+.opt.sel{border:2px solid var(--blue);background:#eaf3ff}.opt.sel b::before{content:"✓ ";color:var(--blue)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.two button{height:44px;border:0;background:#FBE3D8;color:#7A2E12;border-radius:999px;padding:0;font-weight:700;cursor:pointer}.two button.go{background:#D97757;color:#111}.two button:disabled{opacity:.4;cursor:not-allowed}
+.panel textarea.exin{width:100%;min-height:80px;border:1px solid #cfcfcf;border-radius:12px;padding:8px 10px;font:inherit;margin-bottom:6px}.panel textarea[hidden]{display:none}
+.pv{border-top:1px dashed #ccc;margin-top:10px;padding-top:6px}.pv[hidden]{display:none}.pv textarea{width:100%;min-height:120px;border:1px solid var(--blue);border-radius:14px;padding:10px 12px;font:inherit;background:#f5f9ff}
+.fin{display:none}.fin .lb{color:var(--mut);margin:4px 2px 2px}
+.thr.fmode .scr,.thr.fmode .tools,.thr.fmode .panel,.thr.fmode #btns{display:none}.thr.fmode .fin{display:block}
+.thr.fmode .cmp{flex:1;max-height:none;display:flex;flex-direction:column}.thr.fmode .cmp .in{width:100%;flex:1;display:flex;flex-direction:column}
+.thr.fmode .cmp textarea{min-height:34vh;flex:1}
+.en{line-height:1.35;color:#222;background:#f4f4f4;border-radius:8px;padding:4px 8px;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;max-height:16vh;overflow-y:auto}
+.r4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}.r4 button{height:44px;border-radius:999px;padding:0;font-weight:700;border:0;background:#E9E9EB;color:#333;cursor:pointer}.r4 .f-rg{background:#D97757;color:#111}.r4 .f-cx{background:#FBE0E0;color:#9B1C1C}.r4 .f-tr{background:#DCE5FD;color:#1F3FA8}.r4 button:disabled,.sd:disabled{opacity:.4;cursor:not-allowed}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sd.fo{background:#FDE68A;color:#5A3A0A}.sd{display:block;width:100%;margin-top:8px;border-radius:999px;height:44px;padding:0;font-weight:700;border:0;background:#3665F3;color:#fff;cursor:pointer}
+.donebar{text-align:center;color:var(--mut);padding:12px 12px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+@media (min-width:1024px){
+#listView,#listView[hidden]{display:block;position:fixed;top:0;bottom:0;left:0;width:42%;max-width:none;margin:0;overflow-y:auto;border-right:1px solid var(--line);padding:0 8px calc(24px + env(safe-area-inset-bottom))}
+.scr,.cmp .in{max-width:none}
+.thr{inset:0 0 0 42%}.scr{padding-left:24px;padding-right:24px}.cmp{padding-left:24px;padding-right:24px}
+.row{border:2px solid transparent;border-bottom:1px solid var(--line);border-radius:8px}.row.sel{border:2px solid #3665F3;background:#f7f7f7}.l2,.l3{margin-top:5px}
+}
+
+/* 商品タブ (2026-10-11): 利益計算表の検索 + オファー計算 */
+.seg{display:flex;margin:8px 16px 4px;border:1px solid #c7c7c7;border-radius:999px;overflow:hidden}
+.sg{flex:1;border:0;background:#fff;padding:8px 0;font-weight:700;cursor:pointer}.sg.on{background:#111;color:#fff}
+body.tab-sales #listView{display:none}
+/* 配布版 (拡張に同梱) の「準備中」の画面 (app.js の gasSoon・2026-10-21)。ZBook の画面には出ない */
+#soonView{display:none}
+body.tab-soon #soonView{display:block;max-width:640px;margin:0 auto}
+body.tab-soon #listView{display:none}
+/* Summary タブ (2026-10-15): 集計シートの月利ダッシュボードと同じ中身 (カード 4 つ + グラフ 4 つ) */
+.seg2{margin-top:0}
+.sg.blank{cursor:default}
+#summaryView{display:none}
+body.tab-summary #summaryView{display:block;max-width:640px;margin:0 auto;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
+body.tab-summary #listView{display:none}
+.smbody{padding:0 16px}
+.smhd{letter-spacing:1.2px;font-weight:700;color:var(--mut);margin:6px 0 10px}
+.smhdy{display:flex;align-items:center;justify-content:space-between;gap:8px}.smyr{font:inherit;font-weight:700;letter-spacing:0;color:var(--ink);background:#f1f1f1;border:0;border-radius:999px;padding:2px 10px;-webkit-appearance:none;appearance:none}.smyr:disabled{opacity:1}
+.smcards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.smcard{border:1px solid #d6d6d6;border-radius:14px;padding:12px;background:#fff;min-width:0}
+.smlb{font-weight:700;color:var(--mut);letter-spacing:.6px}
+.smv{font-weight:700;line-height:1.2;margin-top:4px;overflow-wrap:anywhere}.smv.g{color:#1a8f3c}
+.smsb{color:var(--mut);margin-top:3px;overflow-wrap:anywhere}
+.smpanel{border:1px solid #d6d6d6;border-radius:14px;padding:12px;margin-bottom:12px;background:#fff}
+.smpt{font-weight:700}
+.smpsub{color:var(--mut);margin-top:2px}
+.smch{display:block;margin-top:8px;max-width:100%;height:auto}
+.smcsub{font-weight:700;color:var(--mut);margin:10px 0 4px}
+.smcr{display:flex;align-items:center;gap:8px;margin:5px 0;}
+.smcc{flex:none;width:34px;font-weight:700}
+.smtr{flex:1;min-width:0;height:10px;border-radius:5px;background:#f1f1f1;overflow:hidden}
+.smfl{height:100%;border-radius:5px;background:#1a8f3c}
+.smcn{flex:none;min-width:2.2em;text-align:right;color:#333}
+.smnote{color:var(--mut)}
+.smdf{color:#1a8f3c;margin-top:2px;overflow-wrap:anywhere}.smdf.neg{color:#b42318}
+.smmo{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.smmb{font:inherit;height:40px;border:1px solid #d6d6d6;border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;padding:0}.smmb.on{background:#111;color:#fff;border-color:#111}.smmb:disabled{color:#b3b3b3;cursor:not-allowed}
+.smstk{display:flex;height:16px;border-radius:8px;overflow:hidden;background:#f1f1f1;margin:10px 0 6px}.smseg{height:100%}
+.smlg,.smdr{padding:6px 0;border-top:1px solid var(--line)}.smlgt,.smdt{display:flex;align-items:center;gap:8px}
+.smdot{flex:none;width:10px;height:10px;border-radius:50%}.smlgn,.smdk{flex:1;min-width:0;overflow-wrap:anywhere}.smlgv,.smdv{flex:none;font-weight:700;text-align:right}.smlgp{flex:none;min-width:3.6em;text-align:right;color:var(--mut)}
+@media (min-width:1024px){
+body.tab-summary #summaryView{position:fixed;top:0;bottom:0;left:0;width:42%;max-width:none;margin:0;overflow-y:auto;border-right:1px solid var(--line);padding:0 8px 24px}
+}
+.istat:empty{display:none}
+.istat{padding:0 16px 6px;color:var(--mut)}.istat.ng{color:#b42318}
+.itv{position:fixed;inset:0;display:flex;flex-direction:column;background:#fff;z-index:6}.itv[hidden]{display:none}
+.itl{font-weight:700;line-height:1.4;margin:4px 0 10px;overflow-wrap:anywhere}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;}.srow .sk{color:var(--mut);flex:none}.srow .sv{font-weight:700;text-align:right;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:6px}.srow .sv.neg{color:#b42318}.srow input{width:7.5em;height:40px;text-align:right;font:inherit;font-weight:700;border:1px solid #cfcfcf;border-radius:10px;padding:0 10px;background:#fff}.srow .cur{color:var(--mut);font-weight:400}.sline{border-top:1px solid var(--line);margin:6px 0}.irp{display:block;width:100%;height:40px;border:0;border-radius:999px;background:#111;color:#fff;font:inherit;font-weight:700;margin:8px 0 6px;cursor:pointer}.irp.irg{background:#f1f1f1;color:var(--ink)}.irp:disabled,.irp.irg:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}.imore{margin:8px 0}.imore summary{color:var(--mut);padding:8px 0;cursor:pointer}.cex{margin-bottom:10px}
+.kv{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);}.kv .k{flex:none;width:9em;color:var(--mut)}
+.kv .v{flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-all}.kv a{color:var(--blue)}
+.calc{margin:18px 0 8px;border:1px solid #d6d6d6;border-radius:14px;padding:12px;background:#fafafa}
+.calc .ch{font-weight:700;margin-bottom:8px}
+.crow{display:flex;gap:8px;align-items:center;margin:6px 0}.crow[hidden]{display:none}
+.crow select,.crow input{height:42px;border:1px solid #cfcfcf;border-radius:12px;padding:0 10px;font:inherit;background:#fff;min-width:0}
+.crow select{flex:none}.crow input{flex:1}.crow input.rin{flex:none;width:5em;text-align:right}
+.calc .cl{color:var(--mut);white-space:nowrap}.calc .cl2{color:var(--mut);margin-top:12px}
+.inote{color:var(--mut);margin:2px 2px 6px}.inote.ng{color:#b42318}.inote[hidden]{display:none}
+.cout{margin:10px 0 4px}.cbig{font-weight:700}.cbig.neg{color:#b42318}
+.cdiff{margin-top:2px}.cdet{color:var(--mut);margin-top:4px;line-height:1.5}
+.cval{font-weight:700;margin:4px 0 0;min-height:1.4em}
+.ifoot{display:flex;gap:10px;align-items:center;justify-content:space-between;color:var(--mut);margin:14px 0 24px}
+.irf,.iupd{width:40px;height:40px;border:0;border-radius:50%;background:#f1f1f1;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;flex:none}.irf:disabled,.iupd:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}.irf svg,.iupd svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (min-width:1024px){
+.itv{inset:0 0 0 42%}.itv .scr{max-width:none;padding-left:24px;padding-right:24px}
+}
+.rpw{display:flex;gap:8px}.rpw .irp{flex:1;width:auto}
+.calc textarea{width:100%;min-height:72px;border:1px solid #cfcfcf;border-radius:12px;padding:8px 10px;font:inherit;background:#fff;resize:vertical}
+.iend{margin-top:56px;padding-top:16px;border-top:1px solid var(--line)}
+.iquote{color:#444;background:#fff8e1;border-radius:8px;padding:6px 8px;margin:6px 0;overflow-wrap:anywhere}
+.cth{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#eee;flex:none}
+.schip{display:block;margin:0 0 6px auto;border:0;border-radius:999px;background:#E9E9EB;color:#333;font:inherit;font-weight:700;padding:6px 14px;cursor:pointer}
+a.pcard{text-decoration:none;color:inherit;cursor:pointer}a.pcard:active{background:#f6f6f6}.pcard{display:flex;gap:12px;align-items:flex-start;border:1px solid #d6d6d6;border-radius:14px;padding:10px;margin:0 0 8px;background:#fff}.pth{width:56px;height:56px;border-radius:10px;object-fit:cover;background:#eee;flex:none}.ptx{flex:1;min-width:0}.plb{color:var(--mut);margin-bottom:2px}.ptt{font-weight:700;line-height:1.35;overflow-wrap:anywhere}.psb{color:var(--mut);margin-top:4px;overflow-wrap:anywhere}.pnt{font-weight:700;color:#14532D;margin-top:4px}.pnt.ng{color:#9A6700}
+
+/* トラブルタブ (2026-10-12): キャンセル・返品・未着の問い合わせ・ケースの文字の一覧 */
+#troublesView{display:none}
+body.tab-troubles #troublesView{display:block;max-width:640px;margin:0 auto;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
+body.tab-troubles #listView{display:none}
+.thd{padding:14px 16px 4px;font-weight:700}
+.tl{line-height:1.5;overflow-wrap:anywhere}
+.row.nolink{cursor:default}.row.nolink:active{background:none}
+.tcl summary{padding:6px 16px}
+.tlk{color:inherit;text-decoration:none;display:block;min-width:0;overflow:hidden;text-overflow:ellipsis}.rt .tlk{color:var(--blue)}a.tlk:has(.pic),a.tlk:has(.ini){flex:none;overflow:visible}
+.tcol{flex:none;width:56px;display:flex;flex-direction:column;align-items:center}.tpr{font-weight:700;color:#1a8f3c;white-space:nowrap;line-height:18px;margin-top:4px;min-height:18px}.tpr.tl{letter-spacing:-.2px}
+.urow .l1 .nm{flex:0 1 auto}.urow .dt{flex:none}.stc{display:inline-flex;align-items:center;gap:4px}
+.tids{display:flex;align-items:center;gap:8px;line-height:18px;margin-top:2px;min-height:18px;white-space:nowrap}.tids .tlk{flex:none;display:inline}
+.ttk{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#333}
+.tcp{flex:none;margin-left:auto;border:0;background:none;padding:0 2px;color:var(--mut);cursor:pointer;display:flex}.tcp svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.tcp.ok,.ttk.ok{color:#1a8f3c}.tcp.ng,.ttk.ng{color:var(--red)}.ttk.ok,.ttk.ng{font-weight:700}
+.tdt{line-height:18px;margin-top:4px;min-height:18px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tdt.hasdue{display:flex;gap:8px}.tdt .udl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.tdt .udue{flex:none;margin-left:auto}.tdt .udue.ng{color:#b42318}
+@media (min-width:1024px){
+body.tab-troubles #troublesView{position:fixed;top:0;bottom:0;left:0;width:42%;max-width:none;margin:0;overflow-y:auto;border-right:1px solid var(--line);padding:0 8px 24px}
+}
+
+/* 販売データタブ (2026-10-13): 売れた注文の一覧 + 販売処理完了メールと同じ内容の詳細 */
+#salesView{display:none}
+body.tab-sales #salesView{display:block;max-width:640px;margin:0 auto;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
+.sbn{background:#dc2626;color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-weight:700;line-height:1.4}
+.sbn .sbs{font-weight:400;margin-top:4px}
+.sbb{display:flex;gap:8px;margin-bottom:12px}
+.sbt{flex:1;display:block;text-align:center;padding:12px 0;border-radius:50px;font-weight:700;color:#fff;text-decoration:none}
+.sbt.bl{background:#0053f0}.sbt.rd{background:#d9000d}.sbt.yl{background:#ffd700;color:#111}.sbt.or{background:#ea580c}.sbt.off{background:#aaa}
+button.sbt{border:0;font-family:inherit;cursor:pointer}.sbb3 .sbt{padding:12px 0;min-width:0}
+@media (min-width:1024px){
+body.tab-sales #salesView{position:fixed;top:0;bottom:0;left:0;width:42%;max-width:none;margin:0;overflow-y:auto;border-right:1px solid var(--line);padding:0 8px 24px}
+}
+
+/* 販売データの未読の印・詳細 (2026-10-13 手直し) */
+.blk{color:inherit;text-decoration:none}
+.pw{position:relative;flex:none;width:56px;height:56px}
+.udot{position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;background:#1a8f3c;box-shadow:0 0 0 2px #fff}   /* 未読の点 (2026-10-14・旧 .sold の文字の替わり) */
+.sct{flex:1;min-width:0}.sttl{display:flex;align-items:flex-start;gap:8px}.sttl .ct{flex:1;min-width:0}
+.card .ct.ok{color:#1a8f3c;font-weight:700}.card .ct.ng{color:var(--red);font-weight:700}
+.sdhost{margin-top:20px}
+.sdhost .sr,.sdhost .istat{padding-left:0;padding-right:0}
+
+/* 販売データの詳細 (2026-10-13 デザイン変更・eBay のメールに寄せた形・元は .backups/mail-app-design-2026-10-13)。ボタンは元の .sbb / .sbt のまま */
+.top .sdsold{margin-left:auto;margin-right:8px;flex:none;background:#1a8f3c;color:#fff;font-weight:700;letter-spacing:.06em;border-radius:999px;padding:5px 10px}
+.top .aib+.sdsold{margin-left:0}
+.scr.sdx{color:var(--ink);padding:0;background:#fff;display:flex;flex-direction:column}
+.sds{padding:20px 16px 0;display:flex;flex-direction:column;gap:10px;flex:none}
+.sdl{font-weight:700}
+.sdc{background:#f7f7f7;border-radius:16px;padding:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+.sdr{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sdk{color:#707070}
+.sdv{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+a.sdv{color:#3665f3;text-decoration:underline}
+.sds .sbb{margin-bottom:0}
+.sdn{margin:10px 20px 0}
+.sdq{width:100%;height:44px;border:1px solid #8f8f8f;border-radius:999px;padding:0 18px;font:inherit;background:#f7f7f7;color:var(--ink)}
+.sdg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.sdg .sbt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbt.gy{background:#e9e9eb;color:#191919}
+.sbshop{font-weight:400;margin-left:8px;opacity:.92}
+.sdf{margin-top:auto;padding-top:20px;flex:none}
+.sdf .sdhost{margin-top:0;border-top:1px solid var(--line);padding:12px 16px calc(16px + env(safe-area-inset-bottom))}
+
+/* 会話の画面 (2026-10-14): 一覧 (Chat タブ) の見た目にそろえる。元は .backups/mail-app-thread-design-2026-10-14。
+   普段のボタン = 一覧の「AI Chat」と同じ薄いグレーの丸 (#f1f1f1)・主のボタン = 黒 (#111)・押せない時は薄いグレーの文字。Item だけ赤を残す。
+   #threadView で絞るので、商品画面・Order・Status には効かない */
+#threadView .top{border-bottom:1px solid var(--line)}
+#threadView .top .who{font-weight:700}
+#threadView .top .tblk{height:32px;padding:0 14px;background:#f1f1f1;color:var(--ink);font-weight:700}
+#threadView .tools button,#threadView .btns button,#threadView .r4 button,#threadView .two button,#threadView .sd,#threadView .opt.cancel{height:40px;border:0;border-radius:999px;padding:0 16px;background:#f1f1f1;color:var(--ink);font-weight:700;cursor:pointer}
+#threadView .tools .tyrow .t-ad,#threadView .tools .tyrow .t-sp{padding:0;width:40px}
+#threadView .tools .t-ad{font-weight:400}
+#threadView .tools .t-ty,#threadView .tools .t-sp,#threadView .btns button.f-rg,#threadView .sd:not(.fo),#threadView .two button.go{background:#111;color:#fff}
+#threadView .tools button:disabled,#threadView .btns button:disabled,#threadView .r4 button:disabled,#threadView .two button:disabled,#threadView .sd:disabled{opacity:1;background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}
+#threadView .tools svg{width:20px;height:20px}
+#threadView .sd{margin-top:8px}
+#threadView .cmp textarea,#threadView .panel textarea.exin{border:1px solid #8f8f8f;border-radius:18px;background:#f7f7f7}
+#threadView .cmp textarea.warn{border-color:var(--red);background:#fff8f7}
+#threadView .pv textarea{border:1px solid #8f8f8f;border-radius:18px;background:#f7f7f7}
+#threadView .panel{border:1px solid var(--line);border-radius:14px;background:#f7f7f7}
+#threadView .opt{border:1px solid var(--line);border-radius:14px}
+#threadView .opt.sel{border:2px solid #111;background:#f7f7f7}#threadView .opt.sel b::before{color:#111}
+#threadView .m.b .bub{background:#f7f7f7;border:1px solid var(--line)}
+#threadView .m.me .bub{background:#e8e8e8}
+#threadView .msg.ok{color:#1a8f3c}
+#threadView .en{background:#f7f7f7;border-radius:12px}
+#threadView .card .pic{border-radius:10px}
+
+/* 会話の上の商品カードは画面の上に固定 (吹き出しの .scr だけがスクロール)・Direct の窓 (2026-10-14) */
+.tfix{flex:none;width:100%;max-width:640px;margin:0 auto;padding:8px 16px 0}.tfix .card{margin-bottom:0}.thr.fmode .tfix{display:none}
+@media (min-width:1024px){.tfix{max-width:none;padding-left:24px;padding-right:24px}}
+
+/* 商品カード・商品画面 (2026-10-14) */
+.tcard{cursor:pointer}.tcard:active{background:#f6f6f6}.tcard .sct{display:flex;flex-direction:column;gap:2px}
+.cprow{display:flex;align-items:flex-start;gap:6px;min-width:0}.cprow>:first-child{flex:1;min-width:0}.cprow .tcp{padding:2px 4px}.cprow .tcp.ok,.cprow .ok{color:#1a8f3c}.cprow .ng{color:var(--red)}.cprow .ct.ok,.cprow .id.ok{font-weight:700}
+.isr.sr{padding:0 0 8px;margin-top:2px}.isst{padding-left:0;padding-right:0}
+
+/* Order の詳細 (2026-10-14): Listing Management と同じカードと編集の行。Supplier / Hapitas / Moppy は白黒の丸ボタン */
+.sds .pcard{margin:0}.pcard.off{background:#f7f7f7;color:#b3b3b3}.pcard.off .plb,.pcard.off .psb,.pcard.off .ptt{color:#b3b3b3}
+.sds .calc{margin:0}
+.sds .sbt.bw{background:#f1f1f1;color:var(--ink);height:40px;line-height:40px;padding:0;}.sds .sbt.bw.off{background:#f1f1f1;color:#b3b3b3}/* Status の詳細 (2026-10-14): Order の詳細と同じ部品 + 期限の大きい印・状況の候補 */
+.top .sdsold.tr{background:#b42318}
+.sdd{font-weight:700}
+.sdm{height:auto;border-radius:16px;padding:12px 16px;resize:vertical}
+.sdcd{display:flex;flex-direction:column;gap:12px}
+.sdcard{background:#f7f7f7;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.sden{line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.sdja{line-height:1.5;color:var(--mut);white-space:pre-wrap;overflow-wrap:anywhere}
+.sds .sbt.bl{height:44px;line-height:44px;padding:0;border:0}
+.sds .sbt[hidden]{display:none}
+/* Status の詳細「追跡を調べる」のボタン (2026-10-15) */
+.tkg{display:flex;gap:8px}.tkg .sbt{padding:10px 0;}
+.ocl{margin-top:10px}.ocs{font-weight:700;margin-bottom:6px}
+.ocr{display:flex;gap:10px;padding:8px 0;border-top:1px solid #e5e5e5}.oct{flex:none;width:84px;color:#707070;font-variant-numeric:tabular-nums}.ocd{flex:1;min-width:0;}
+/* Order の詳細「一致候補」(手動対応・2026-10-15) */
+.mcl{margin-top:4px}.mcl .urow{padding:12px 0;cursor:default}.mcl .urow:active{background:none}
+.msel{flex:none;margin-left:auto;border:0;border-radius:999px;padding:0 10px;height:18px;line-height:18px;font:inherit;font-weight:700;letter-spacing:.06em;background:#e9e9eb;color:#191919;cursor:pointer}.msel.on{background:#1a8f3c;color:#fff}
+.sfix{flex:none;width:100%;max-width:640px;margin:0 auto;background:#fff}.sfix .urow{cursor:default}.sfix .urow:active{background:none}.sfix .l2{white-space:normal}.sfix .tids .cprow{flex:1}
+@media (min-width:1024px){.sfix{max-width:none}.sfix .urow{padding-left:24px;padding-right:24px}}
+.mdr{display:flex;gap:8px;align-items:center;margin-top:4px}.mdr .sdq{flex:1;min-width:0}.sds .mdr .sbt{flex:none;width:auto;padding:0 22px;white-space:nowrap}
+
+/* ListingTool の横パネルの中 (?embed=panel・body.embed) だけ (2026-10-15 ユーザー指示): 左右の端の薄いボタン。左 = 戻る (‹ と同じ)・右 = 最後に開いていた会話へ。スマホ・普通のブラウザには作られない */
+.edge{position:fixed;top:0;bottom:0;width:16px;z-index:30;margin:0;padding:0;border:0;background:transparent;color:#c4c4c4;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.edge[hidden]{display:none}
+.edge.el{left:0}.edge.er{right:0}
+.edge:hover,.edge:active{background:#f1f1f1;color:#707070}
+
+/* ListingTool の横パネルの中 (body.embed) だけ・PC の細い行 (2026-10-15 ユーザー指示「文字を小さくして以前のサイドパネルくらいに・行を細く」)。
+   上の題と 2 段のタブは panel.css の #mt-head と同じ値 (Listing ⇄ Chat で上が跳ねないように)。スマホ・普通のブラウザには効かない */
+body.embed .hd{display:none}   /* 題は Chrome の上の帯だけ (2026-10-15 ユーザー指示「2 列だって 先頭だけ残して」) */
+body.embed .segs{position:sticky;top:0;z-index:4;background:#fff;padding-top:6px}   /* 横パネルの中ではタブの 2 行を上に固定 (2026-10-15 ユーザー指示) */
+body.embed .segs{min-height:70px;box-sizing:border-box}body.embed .thr,body.embed .itv{top:70px}   /* 開いた画面 (会話・注文・Status・商品) もタブの 2 行の下から出す = どの画面でもタブが見える (2026-10-16 ユーザー指示「どの画面でもヘッダーのタブは固定」)。70 = タブの 2 行の高さ */
+body.embed #listView[hidden]{display:block}   /* 会話を開いても下の一覧 (= 上のタブ) を消さない。一覧は開いた画面の下に隠れる */
+body.embed .seg{margin:3px 10px 3px}body.embed .seg2{margin-top:0;margin-bottom:4px}
+body.embed .sg{padding:5px 0;line-height:1.3}
+body.embed:not(.embed-ai) .seg2{display:none}
+body.embed .sr{padding:2px 10px 6px}body.embed .sr input{height:32px;padding:0 14px;}
+body.embed .bar{padding:2px 10px 6px;gap:6px}body.embed .bar button{width:30px;height:30px}body.embed .bar svg{width:16px;height:16px}
+body.embed .bar button.aibtn{width:auto;padding:0 12px;}
+body.embed .row{padding:7px 10px;gap:8px}
+body.embed .pic,body.embed .ini,body.embed .pw,body.embed .card .pic,body.embed .card .ini,body.embed .cth,body.embed .pth{width:38px;height:38px;border-radius:8px}body.embed .tcol{width:54px}body.embed .tpr{letter-spacing:-.2px;line-height:14px;min-height:14px;margin-top:2px}body.embed .l2,body.embed .l3{margin-top:1px}
+body.embed .sti svg{width:14px;height:14px}body.embed .none{padding:24px 10px;}
+body.embed .istat{padding:0 10px 4px;}body.embed .thd{padding:8px 10px 2px;}body.embed .tcl summary{padding:4px 10px}
+/* 会話 */
+body.embed .top{padding:4px 6px;gap:2px}body.embed .back{padding:0 8px 2px}body.embed #threadView .top .tblk{height:26px;padding:0 12px;}
+body.embed .scr{padding:8px 10px 10px}body.embed .tfix{padding:6px 10px 0}
+body.embed .card{padding:7px;gap:8px;margin-bottom:4px;border-radius:10px}
+body.embed .day{margin:10px 0 6px}body.embed .m{margin:4px 0;gap:6px}body.embed .av{width:24px;height:24px;}
+body.embed .bub{padding:7px 11px;line-height:1.4}body.embed .mimg img{max-width:160px;max-height:190px}
+body.embed .cmp{padding:6px 10px calc(8px + env(safe-area-inset-bottom))}body.embed .cmp textarea,body.embed .pv textarea{padding:7px 12px}
+body.embed #threadView .tools,body.embed .tools{gap:6px;margin-bottom:6px}body.embed .btns{gap:6px;margin-top:6px}body.embed .r4{gap:6px;margin-top:6px}
+body.embed #threadView .tools button,body.embed #threadView .btns button,body.embed #threadView .r4 button,body.embed #threadView .two button,body.embed #threadView .sd,body.embed #threadView .opt.cancel{height:32px;padding:0 12px}
+body.embed #threadView .tools .tyrow .t-ad,body.embed #threadView .tools .tyrow .t-sp{width:32px;padding:0}
+body.embed #threadView .tools svg{width:16px;height:16px}body.embed #threadView .sd{margin-top:6px}
+/* Order / Status / Summary / 商品画面 */
+body.embed .smbody{padding:0 10px}body.embed .smcards{gap:6px;margin-bottom:8px}body.embed .smcard,body.embed .smpanel{padding:8px;border-radius:10px}
+body.embed .sbn{padding:8px 10px;margin-bottom:8px}
+body.embed .sbb{margin-bottom:8px}body.embed .sbt,body.embed .sbb3 .sbt{padding:7px 0;}
+body.embed .sds{padding:10px 10px 0;gap:6px}body.embed .sdc{padding:10px;gap:8px;border-radius:12px}
+body.embed .sdn{margin:6px 10px 0}body.embed .sdq{height:32px;padding:0 14px}body.embed .sdf{padding-top:10px}
+body.embed .itl{margin:2px 0 6px}body.embed .srow{padding:5px 0}
+body.embed .kv{padding:4px 0}body.embed .calc{margin:10px 0 6px;padding:8px;border-radius:10px}body.embed .calc .ch{margin-bottom:6px}
+body.embed .crow{margin:4px 0}body.embed .crow select,body.embed .crow input{height:30px;}
+body.embed .irf,body.embed .iupd{width:30px;height:30px}body.embed .pcard{padding:7px;gap:8px;border-radius:10px}
+/* 横パネルの中 (body.embed) だけ: いちばん小さい字も 11px (2026-10-15 ユーザー指示「文字が見づらくならないように」)。灰色の地は出品の画面だけ (2026-10-16 ユーザー指示「灰色はリスティングだけ」) */
+/* 横パネルの中の文字の決まり (2026-10-16 ユーザー指示「ステータス文字大きすぎる・統一して・根本 design」)。どの画面もこの 5 段だけ:
+   画面の題 14px 太 / 見出し・商品名・期限 13px 太 / 本文 13px / 欄の名前・補足 11px / ボタン 12.5px・高さ 30px。開いた画面 (Order・Status・商品) に効かせる */
+body.embed .itv .sdl,body.embed .itv .ptt,body.embed .itv .sdd,body.embed .itv .itl{font-weight:700}
+body.embed .itv .sbt,body.embed .itv .sbb3 .sbt{height:32px;min-height:0;padding:0 8px;line-height:32px;display:flex;align-items:center;justify-content:center}
+body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{height:32px;}
+
+/* ===== 文字の大きさの決まり (2026-10-16 ユーザー指示「eBay の iPhone アプリくらいに・スマホも PC の横パネルも同じ 5 段」) =====
+   画面の題 18px 太 / 見出し・商品名・名前 15px 太 / 本文・吹き出し・入力 15px / 補足 (時刻・欄の名前・注記) 12px / ボタンとタブ 14px。
+   これより下に書かない・個別の font-size を足さない (足したい時は下のどの段に入るかを決めて、ここの一覧へ入れる)。
+   例外は記号 (‹ × ＋ など) と数字の大物 (Summary・計算機・金額) だけ。横パネル (body.embed) は 1 段小さい値 (下の body.embed の行) */
+:root{--fs-title:18px;--fs-head:15px;--fs-body:15px;--fs-small:12px;--fs-btn:14px;--fs-fig:22px}
+body.embed{--fs-title:15px;--fs-head:13px;--fs-body:13px;--fs-small:11px;--fs-btn:13px;--fs-fig:18px}   /* PC の横パネルだけ eBay の PC 版の大きさに寄せる (2026-10-16 ユーザー指示「サイドパネルの文字 大きいから Default に寄せて」)。スマホは :root のまま */
+body,body.embed{font-size:var(--fs-body);line-height:1.4}
+.top .who,#threadView .top .who,body.embed #threadView .top .who,body.embed .itv .who{font-size:var(--fs-title);font-weight:700}
+.nm,.ptt,.sdl,.itl,.thd,.sdd,.ocs,.calc .ch,.ocard .oh,.smpt,.sbn,
+body.embed .itv .sdl,body.embed .itv .ptt,body.embed .itv .sdd,body.embed .itv .itl{font-size:var(--fs-head);font-weight:700}
+.l2,.l3,.none,.bub,.bub .jt,.card .ct,.en,.opt,.tl,.tcl,.srow,.kv,.sden,.sdja,.sdv,.ocd,.smcr,.smnote,.cval,.itv,
+.sr input,.sdq,.cmp textarea,.pv textarea,.panel textarea.exin,.calc textarea,.crow select,.crow input,
+body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{font-size:var(--fs-body)}
+.sdv{font-weight:700}
+.card .pr,.dt,.tm,.tpr,.tpr.tl,.sdk,.ja,.bub .org,.rb,.tids,.tdt,.info,.fl,details,.msg,.ph,.kind,.donebar,.fin .lb,.aib,.bar .lm,.day,.ord,
+.card .id,.ocard .oh span:last-child,.av,.smhd,.smlb,.smsb,.smpsub,.smcsub,.inote,.cdiff,.cdet,.calc .cl,.calc .cl2,.ifoot,.irf,.iquote,.sbn .sbs,.oct,
+.msel,.sbshop,.sdsold,.opt span,.opt.tpl span,.istat,.plb,.psb,.pnt,.tdt .udue,.udl{font-size:var(--fs-small)}
+.sg,.btns button,.tools button,.r4 button,.two button,.sd,.opt.cancel,.top .tblk,.bar button.aibtn,.sbt,.tkg .sbt,.sbb3 .sbt,.schip,.sds .sbt.bw,
+#threadView .top .tblk,body.embed #threadView .top .tblk,body.embed .itv .sbt,body.embed .itv .sbb3 .sbt{font-size:var(--fs-btn)}
+.smv,.cbig,.srow .sv.big,.itv .cbig,.itv .srow .sv.big{font-size:var(--fs-fig)}
+.hd h1{font-size:28px;font-weight:700}   /* スマホの一番上の題 Management Tools は元の大きさのまま (パネルの中では出さない) */
+#rows .tdt{font-size:var(--fs-body)}   /* Chat 一覧の最後の行 = メッセージの書き出しは本文の大きさ (2026-10-16 ユーザー指示「メッセージはこれくらい」) */
+/* 記号 (字ではない) */
+.back{font-size:30px}body.embed .back{font-size:24px}.ini{font-size:22px}body.embed .ini{font-size:16px}
+.tools .t-ad,#threadView .tools .t-ad{font-size:26px}body.embed #threadView .tools .t-ad{font-size:20px}
+.th button{font-size:14px}.edge{font-size:22px}
+
+/* Typing の窓の右上の閉じる × (2026-10-16 ユーザー指示: ボタンではなく薄く小さく) */
+.taw{position:relative}.taw .tax{position:absolute;top:4px;right:10px;font-size:16px;line-height:1;color:#b3b3b3;cursor:pointer;user-select:none}.taw textarea[hidden]+.tax{display:none}
+.trow3{display:flex;align-items:center;justify-content:space-between;gap:8px}.trow3 .cprow{flex:none;align-items:center}.trow3 .cprow>:first-child{flex:none}.tsup{flex:none;padding:0 6px;border:1px solid #cfcfcf;border-radius:6px;background:#fff;color:var(--mut);font:inherit;line-height:inherit;cursor:pointer}.tsup:active{background:#f1f1f1}
+.m.me.pend .bub{background:#fff;border:1px dashed #8f8f8f}#threadView .m.me.pend .bub{background:#fff}.pbtn{display:flex;gap:8px;width:100%}.pbtn button{flex:1;margin-top:8px;height:40px;border:0;border-radius:999px;font-weight:700;cursor:pointer;background:#f1f1f1;color:var(--ink)}#threadView .pbtn button.sd{background:#111;color:#fff;margin-top:8px}.pbtn button:disabled{opacity:.4;cursor:not-allowed}
+/* AI 返信案 (確認待ち): 一覧の AI 印は緑・吹き出しは黒地に白文字・ボタンは反転 */
+.shb.aig{background:#1e8e3e;color:#fff}
+.m.me.pend .bub,#threadView .m.me.pend .bub{background:#1c1c1e;color:#fff;border:0}.m.me.pend .bub .org{color:#c7c7cc}
+#threadView .pbtn button.sd{background:#fff;color:#111;border:1px solid #111}#threadView .pbtn button.f-bk,.pbtn button.f-bk{background:#1c1c1e;color:#fff}
