@@ -17,7 +17,10 @@
   var cfg = { url: String(lget('url') || ''), token: String(lget('token') || '') }, waiters = [];
   function haveCfg() { return !!(cfg.url && cfg.token); }
   function ready() { var w = waiters; waiters = []; w.forEach(function (fn) { try { fn(); } catch (e) { /* 次へ */ } }); }
-  function validUrl(u) { return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u); }
+  function validUrl(u) { return /^https:\/\/script\.google\.com\/(?:a\/macros\/[^\/]+|macros)\/s\/[\w-]+\/exec$/.test(u); }
+  // 貼り付けの揺れを吸収 (2026-10-21: 「違う」と出た)。/dev や ?以降・空白を落として …/exec に揃える。Bark は api.day.app/ のアドレス丸ごとでもキーだけ取り出す
+  function normUrl(u) { var m = String(u || '').replace(/\s+/g, '').match(/^(https:\/\/script\.google\.com\/(?:a\/macros\/[^\/]+|macros)\/s\/[\w-]+)/); return m ? m[1] + '/exec' : String(u || '').trim(); }
+  function normBark(b) { var s = String(b || '').replace(/\s+/g, ''); var m = s.match(/api\.day\.app\/([A-Za-z0-9_-]+)/); return m ? m[1] : s.replace(/^\/+|\/+$/g, ''); }
 
   var overlay = null;
   function closeOverlay() { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); overlay = null; }
@@ -60,14 +63,14 @@
         }, function (e) { msg('GAS に届きませんでした: ' + (e && e.message ? e.message : e), true); return false; });
     }
     function saveCfg() {
-      var u = $('mgUrl').value.trim(), t = $('mgTok').value.trim();
+      var u = normUrl($('mgUrl').value), t = $('mgTok').value.replace(/\s+/g, '');
       if (u) { if (!validUrl(u)) { msg('URL の形が違います (https://script.google.com/macros/s/…/exec)。', true); return false; } cfg.url = u; lset('url', u); }
       if (t) { cfg.token = t; lset('token', t); }
       if (!haveCfg()) { msg('URL とトークンを入れてください。', true); return false; }
       return true;
     }
     $('mgSave').onclick = function () {
-      var b = $('mgBark').value.trim(), c = $('mgClaude').value.trim();
+      var b = normBark($('mgBark').value), c = $('mgClaude').value.trim();
       var keys = {};
       if (b) keys.bark = b;
       if (c) keys.claude = c;
