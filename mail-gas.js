@@ -157,8 +157,15 @@
     });
     return threads;
   }
+  // 古い返事で新しい控えを戻さない (2026-10-22): 最初の控え・取り直し・会話を引く前の取り直し (warm) が同時に走ると、遅く着いた古い返事が
+  //   送った返信や訳の入った新しい state を上書きし、返信済みの会話に未返信の下書きが出たり自分の返信が消えたりした。
+  //   取込時刻 (updated = GAS の syncedAt) が今より古い返事は採らない (同じ時刻は採る = 訳・済みの印だけ変わった返事)
+  function olderThanState(r) {
+    return !!state && !!state.updated && String(r.updated || '') < String(state.updated);
+  }
   function adopt(r) {
     if (!r || !r.ok) throw new Error((r && r.message) || '会話を読めませんでした');
+    if (olderThanState(r)) return r;
     state = { updated: r.updated || '', queueUpdated: r.queueUpdated || '', threads: decorate(r.threads || []) };
     return r;
   }
@@ -458,9 +465,28 @@
   }
 
   // ---------------------------------------------------------------- 送信
+  // 送れた直後に、この端末の state へ反映する (返信の吹き出しを出す・未返信の下書き/チップを消す)。ZBook はサーバーが返す state にもう入っているが、
+  //   こちらの getState(false) は端末のメモリの state をそのまま返す = 反映しないと、次の取り直しまで自分の返信が出ず下書きも残った (2026-10-22)。
+  //   サーバーの控えにも sentLog で入るので、次に取り込んだ state と重ならない (local- の id は取り込み時に置き換わる)
+  var DRAFT_KEYS = ['tier', 'intent', 'draft', 'draft_ja', 'flags', 'basis', 'note', 'examples', 'stat', 'confirm'];
+  function sentLocal(b) {
+    var t = state && findThread(b.mid);
+    if (!t) return;
+    var body = trim(b.body);
+    if (body && !(t.msgs || []).some(function (m) { return m.who === 'me' && trim(m.text) === body && /^local-/.test(String(m.id || '')); })) {
+      var m = { id: 'local-' + Date.now(), who: 'me', text: body, at: new Date().toISOString() };
+      if (b.images && b.images.length) m.media = [];
+      (t.msgs = t.msgs || []).push(m);
+      t.last_at = m.at;
+    }
+    t.open = false; t.ai = false;
+    DRAFT_KEYS.forEach(function (k) { delete t[k]; });
+    bump();
+  }
   function send(b) {
     return load().then(function () {
       return gas('send', { mid: b.mid, body: b.body, images: b.images || [], live: true }, { lane: 'front', noAbort: true }).then(function (j) {
+        if (j && j.ok) sentLocal(b);
         return j;
       }, function (e) {
         if (e && e.network) return { ok: false, keepLocked: true, message: '送信結果が不明です (' + msgOf(e) + ')。eBay の送信済みを確認してください。' };

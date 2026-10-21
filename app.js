@@ -75,6 +75,9 @@ function setStatus(txt, ng) { var s = document.getElementById('mailStatus'); if 
 function boot() {
   var client = null;
   function got(data, label) {
+    // 配布版 (GAS_MODE) だけ: 表示中より古い控えは採らない。最初の控えと取り直しを同時に取りに行く (下) ので、遅く着いた古い返事で
+    //   送った返信や訳の入った新しい画面を戻さない。ZBook (GAS_MODE でない) は従来どおり毎回置き換える
+    if (GAS_MODE && shownStamp && shownStamp.updated && String(data.updated || '') < shownStamp.updated) return;
     lsSet(LS_STATE, JSON.stringify({ at: Date.now(), data: data }));
     shownStamp = { updated: data.updated || '', queueUpdated: data.queueUpdated || '' };
     if (client) client.apply(data); else client = startClient(data);
@@ -91,6 +94,19 @@ function boot() {
     if (!client) return;
     apiCall('GET', '/api/state').then(function (d) { got(d, '控え'); }).catch(function () { /* 次の 30 秒でまた見る */ });
   };
+  if (GAS_MODE) {
+    // 配布版: GAS は 1 回 4〜10 秒かかる。控えを待ってから取り直す (直列) と最新が出るまで倍かかるので、同時に取りに行く。
+    //   控えが先に着けば先に描き、取り直しが先に着けば控えは捨てる (got の古さの判定)
+    apiCall('GET', '/api/state').then(function (d) {
+      got(d, '控え'); if (!fresh && shownStamp && shownStamp.updated === (d.updated || '')) setStatus('控え ' + hhmm(d.updated) + ' / 取り直し中…');
+    }).catch(function () { /* 取り直しの結果で描く */ });
+    apiCall('GET', '/api/state?fresh=1', null, function (h) { fresh = h.get('X-Mail-Fresh') === '1'; }).then(function (d) {
+      got(d, fresh ? '最新' : '控え (Drive を読めませんでした)');
+    }).catch(function (e) {
+      setStatus('取り直せません: ' + (e && e.message ? e.message : e) + (client ? ' (控えを表示中)' : ''), true);
+    });
+    return;
+  }
   apiCall('GET', '/api/state').then(function (d) {
     got(d, '控え'); setStatus('控え ' + hhmm(d.updated) + ' / 取り直し中…');
     return apiCall('GET', '/api/state?fresh=1', null, function (h) { fresh = h.get('X-Mail-Fresh') === '1'; });
