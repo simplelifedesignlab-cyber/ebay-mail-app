@@ -146,13 +146,10 @@
 
   // ---------------------------------------------------------------- 会話の状態
   function decorate(threads) {
-    if (!seen.init) {                                    // 最初の 1 回は今ある会話を全部既読にする (ZBook の mail_seen と同じ)
-      threads.forEach(function (v) { if (v.mid) seen.mids[v.mid] = 1; });
-      seen.init = true; persistSeen();
-    }
     threads.forEach(function (v) {
-      var last = v.msgs && v.msgs.length ? v.msgs[v.msgs.length - 1] : null;
-      v.unread = !!(v.mid && !seen.mids[v.mid] && !(last && last.who === 'me'));
+      // 未読は GAS の既読の控え (Mail/mail_seen.json・端末をまたいで共通 = ZBook の mail_seen と同じ) が決める。この端末で開いた分はすぐ既読にする (mailSeen)
+      if (v.srvUnread === undefined) v.srvUnread = !!v.unread;
+      v.unread = !!(v.srvUnread && v.mid && !seen.mids[v.mid]);
       (v.msgs || []).forEach(function (m) { if (m.id && ja[m.id]) m.ja = ja[m.id]; });
     });
     return threads;
@@ -453,7 +450,7 @@
   var TROUBLE_TTL_MS = 20 * 1000, CPASS_TTL_MS = 10 * 60 * 1000;
   // GAS は前回から 10 分以内なら eBay を呼ばず控えを返す (?fresh=1 = 更新ボタンは飛ばす)。?badge=1 = タブの件数だけ (控えを返す・eBay は呼ばない)
   function troubles(path) {
-    if (/[?&]badge=1/.test(path)) return gas('troubles', { badge: true }, { lane: 'trouble' });
+    // 起動時のタブの件数 (app.js が ?badge=1 を付ける) も、ZBook と同じく普通に取る: 前回から 10 分を過ぎていれば eBay を取り直す (GAS が 10 分の間隔を守る)
     var fresh = /[?&]fresh=1/.test(path);
     if (!fresh && troubleC && Date.now() - troubleC.at < TROUBLE_TTL_MS) return Promise.resolve(clone(troubleC.data));
     // ok:false でも error と控えを画面が読む (ZBook と同じ・gas で素通し)
@@ -650,7 +647,8 @@
     }
     if (method === 'GET' && p === '/api/summary') return summary(/[?&]fresh=1/.test(path));
     if (method === 'GET' && p === '/api/sales') {
-      if (/[?&]cached=1/.test(path)) return Promise.resolve(salesC ? clone(salesC.data) : { ok: true, items: [] });   // Status の 4 行目の材料: Order を開いたことがある分だけ (新しく取りに行かない)
+      // Status の 4 行目の材料 (app.js が ?cached=1 を付ける)。ZBook はサーバーが持つ Order の控えを返す = 端末に控えが無ければ普通に取る (開いた時と同じ・20 秒の控えと GAS の控えが効く)
+      if (/[?&]cached=1/.test(path) && salesC) return Promise.resolve(clone(salesC.data));
       return salesList();
     }
     if (method === 'GET' && p === '/api/troubles') return troubles(path);
@@ -673,6 +671,7 @@
       return load().then(function () {
         if (!b.mid) { var er = new Error('mid がありません'); er.status = 400; throw er; }
         seen.mids[String(b.mid)] = 1; persistSeen();
+        gas('mail_read', { mid: String(b.mid) }, { lane: 'par' }).catch(function () { /* 控えに書けなくてもこの端末では既読 */ });
         return { ok: true };
       });
     }
