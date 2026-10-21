@@ -262,7 +262,7 @@
       var todo = [];
       state.threads.forEach(function (t) {
         (t.msgs || []).slice().reverse().forEach(function (m) {
-          if (!m.id || !m.text || Object.prototype.hasOwnProperty.call(ja, m.id)) return;
+          if (!m.id || !m.text || Object.prototype.hasOwnProperty.call(ja, m.id) || m.ja) return;     // m.ja = GAS が控えに保存した訳 (ZBook の翻訳キャッシュと同じ役)
           if (/^(local|sent)-/.test(String(m.id))) return;
           if (isJapanese(m.text) || PHOTO_ONLY.test(String(m.text).trim())) { ja[m.id] = ''; return; }
           todo.push({ id: m.id, text: m.text, buyer: t.buyer });
