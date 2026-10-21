@@ -6,6 +6,7 @@
 //   ・AI (方針案・日本語案・書き直し・外国語への訳・買い手の文の日本語訳) = Settings の Claude キーで api.anthropic.com を直接呼ぶ
 //   ・未読の印・訳のキャッシュ = 端末 (chrome.storage.local)
 //   ・Order / Summary = 第 2 段 (2026-10-21): GAS (Mail_Sales_Api.gs.js) へ summary / sales / sales_read / sales_cost / sales_cands / sales_match / item_pics。未読の印は GAS の控え (ZBook と同じ = 端末をまたいで共通)
+//   ・Order / Status / Summary の一覧は「前回の控えをすぐ出して、裏で取り直し、来たら画面を差し替える」(2026-10-21 夜・Chat と同じ形。下の「タブの一覧」)。同じ呼び出しは同時に 1 本だけ
 //   ・Status = 第 3 段 (2026-10-21): GAS (Mail_Trouble_Api.gs.js) へ troubles / trouble_archive / cpass_track / oc_track。状況ボタンの英文案 (/api/trouble-draft) は Settings の Claude キーで直接つくる
 //   ・商品タブ・Re:translation・注文カード・自動返信の確認吹き出し = 第 4 段 (GAS が返す)。通知は Bark (GAS から)
 //   ・iPhone の PWA (GitHub Pages・ebay-mail-app。2026-10-21 第 5 段): 同じこのファイルを使う。違いは 1 点だけ
@@ -30,9 +31,10 @@
   var S = { url: '', token: '', claude: '', loaded: null };
   var state = null, templates = null, templatesAt = 0, itemInfoCache = {};
   var seen = null, ja = null, freshP = null, contBusy = false, transBusy = false;
-  var lanes = { long: Promise.resolve(), front: Promise.resolve(), sales: Promise.resolve(), trouble: Promise.resolve() };
-  var salesC = null, summaryC = null;               // Order の一覧 (20 秒)・Summary (5 分。更新ボタン = fresh で読み直す)
-  var troubleC = null, cpassC = {};                  // Status (20 秒。10 分の間隔は GAS が守る)・OC 追跡番号 → CPaSS の番号 (10 分)
+  var lanes = { long: Promise.resolve(), front: Promise.resolve(), sales: Promise.resolve(), trouble: Promise.resolve(), summary: Promise.resolve() };
+  var TAB_STORE = 'mailTabSnap';                    // 端末に残す Order / Status / Summary の前回の控え
+  var tabC = {}, flights = {}, bgBusy = {}, persistTimer = null;   // タブの一覧の控え・実行中の呼び出し (同じ物は 1 本だけ)・裏の取り直しの重複防止
+  var cpassC = {};                                   // OC 追跡番号 → CPaSS の番号 (10 分)
 
   // ---------------------------------------------------------------- storage / 設定
   function st() { try { return root.chrome && root.chrome.storage && root.chrome.storage.local; } catch (e) { return null; } }
@@ -57,15 +59,16 @@
   }
   function load() {
     if (S.loaded) return S.loaded;
-    S.loaded = sget(['listingCfg', 'claudeApiKey', 'mailSeen', 'mailJa']).then(function (d) {
+    S.loaded = sget(['listingCfg', 'claudeApiKey', 'mailSeen', 'mailJa', TAB_STORE]).then(function (d) {
       applySettings(d);
+      tabRestore(d[TAB_STORE]);
       seen = d.mailSeen && typeof d.mailSeen === 'object' && d.mailSeen.mids ? d.mailSeen : { init: false, mids: {} };
       ja = d.mailJa && typeof d.mailJa === 'object' ? d.mailJa : {};
     });
     try {
       root.chrome.storage.onChanged.addListener(function (ch, area) {
         if (area !== 'local') return;
-        if (ch.listingCfg) { var c = ch.listingCfg.newValue || {}; S.url = String(c.url || ''); S.token = String(c.token || ''); }
+        if (ch.listingCfg) { var c = ch.listingCfg.newValue || {}; if (String(c.url || '') !== S.url) tabC = {}; S.url = String(c.url || ''); S.token = String(c.token || ''); }   // 別の GAS の控えは出さない
         if (ch.claudeApiKey) S.claude = String(ch.claudeApiKey.newValue || '').trim();
       });
     } catch (e) { /* 拡張の外 (テスト) では監視しない */ }
@@ -452,41 +455,153 @@
     });
   }
 
+  // ---------------------------------------------------------------- タブの一覧 (Order / Status / Summary): 前回の控えをすぐ出して、裏で取り直す (2026-10-21 夜)
+  // Chat は端末の控えをすぐ出して裏で取り直す。他のタブは 1 回の呼び出しが 6〜30 秒 (GAS の Drive / Gmail / シート) で、開くたびに待たされていた。同じ形にする:
+  //   ① この端末の控え (メモリ → 端末の保存 mailTabSnap) があればすぐ返す  ② 無ければ GAS の「速い経路」(前回の一覧をそのまま返す・数秒。Gmail / eBay / 重いシート読みはしない)
+  //   ③ 控えが古ければ裏で取り直し、中身が変わっていたら画面を差し替える。app.js は 1 回の呼び出しの答えしか受け取れない (app.js は ZBook と同じ 1 本) ので、
+  //      差し替えは「そのタブの更新ボタンを押す」形 (swapScreen)。更新ボタンが読み直す時は、届いたばかりの中身をそのまま返す (swapUntil)
+  //   同じ呼び出し (action と fresh/badge) は同時に 1 本だけ (once)。iPhone の「Load failed」(長い通信が切れる) は裏の取り直しだけ 1 回やり直す
+  var SALES_TTL_MS = 20 * 1000, SUMMARY_TTL_MS = 5 * 60 * 1000, TROUBLE_TTL_MS = 20 * 1000;
+  var TABS = {
+    sales: {
+      ttl: SALES_TTL_MS, body: 'tab-sales', btn: '#salesView .bar button', details: ['saleView', 'itemView'], skip: { read_at: 1, cached: 1, snap_at: 1 },
+      cold: function () { return gasOk('sales', { fresh: false }, { lane: 'par' }); },
+      fetch: function () { return gasOk('sales', { fresh: true }, { lane: 'sales', timeout: STATE_TIMEOUT_MS }); }
+    },
+    troubles: {
+      ttl: TROUBLE_TTL_MS, body: 'tab-troubles', btn: '#trRf', details: ['statusView', 'itemView'], skip: { cached: 1, snap_at: 1 },
+      // ok:false でも error と控えを画面が読む (ZBook と同じ・gas で素通し)。10 分の間隔は GAS が守る (force = 更新ボタンは飛ばす)
+      cold: function () { return gas('troubles', { badge: true }, { lane: 'par' }); },
+      fetch: function (force) { return gas('troubles', { fresh: !!force }, { lane: 'trouble', timeout: STATE_TIMEOUT_MS }); }
+    },
+    summary: {
+      ttl: SUMMARY_TTL_MS, body: 'tab-summary', btn: '#smRf', details: [], skip: { updated: 1, cached: 1 },
+      cold: null,                                           // GAS 側に控えは無い (毎回シートを読む・数秒)。端末の控えが無い最初の 1 回だけそのまま取る
+      fetch: function () { return gasOk('summary', {}, { lane: 'summary' }); }
+    }
+  };
+  function once(key, fn) {
+    if (flights[key]) return flights[key];
+    var p = flights[key] = new Promise(function (res) { res(fn()); }).then(function (r) { delete flights[key]; return r; }, function (e) { delete flights[key]; throw e; });
+    return p;
+  }
+  function tabOk(key, d) { return !!d && (key !== 'troubles' || d.ok === true); }       // ok:false (Status の取得失敗) は控えない
+  function tabSig(key, d) {
+    var skip = TABS[key].skip, o = {};
+    Object.keys(d || {}).forEach(function (k) { if (!skip[k]) o[k] = d[k]; });
+    return JSON.stringify(o);
+  }
+  function tabRestore(saved) {
+    if (!saved || typeof saved !== 'object' || saved.u !== S.url || !saved.tabs) return;
+    Object.keys(TABS).forEach(function (k) {
+      var t = saved.tabs[k];
+      if (t && t.data && typeof t.data === 'object' && !tabC[k]) tabC[k] = { at: 0, data: t.data, swapUntil: 0 };   // at:0 = 古い扱い (見せたあと裏で取り直す)
+    });
+  }
+  function tabPersist() {
+    if (persistTimer) return;
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      var tabs = {};
+      Object.keys(tabC).forEach(function (k) { tabs[k] = { data: tabC[k].data }; });
+      sset({ mailTabSnap: { u: S.url, tabs: tabs } });
+    }, 300);
+  }
+  function tabDrop(key) { delete tabC[key]; tabPersist(); }                               // 書き込みのあと・Archive のあと: 古い控えを出さない
+  // 取り直して控えに入れる。{ data, changed, kept } (kept = 控えに入れた / changed = 前の控えと中身が違う)
+  function tabFetch(key, force) {
+    var T = TABS[key];
+    return once(key + ':' + (force ? 'force' : 'bg'), function () {
+      return T.fetch(force).then(function (d) {
+        var r = { data: d, changed: false, kept: false };
+        if (!tabOk(key, d)) return r;
+        var prev = tabC[key];
+        r.kept = true; r.changed = !prev || tabSig(key, prev.data) !== tabSig(key, d);
+        tabC[key] = { at: Date.now(), data: d, swapUntil: 0 };
+        tabPersist();
+        return r;
+      });
+    });
+  }
+  function troubleCount(r) {                                                                 // app.js の起動時の件数 (SECTIONS) と同じ数え方
+    return ['unpaid', 'late', 'cancels', 'returns', 'inquiries', 'cases'].reduce(function (n, k) {
+      return n + ((k === 'late' || k === 'unpaid') ? (r[k] || []) : ((r.open || {})[k] || [])).length;
+    }, 0);
+  }
+  // そのタブを見ていて、詳細を開いていなければ、更新ボタンを押して画面を作り直させる。使えない間 (読み込み中で disabled・詳細を見ている間) は 1.5 秒おきに最大 20 回待つ
+  function swapScreen(key, tries) {
+    tries = tries || 0;
+    var d = root.document, T = TABS[key];
+    if (!d || !d.body || !d.body.classList || !d.querySelector) return;
+    if (!d.body.classList.contains(T.body)) return;                       // そのタブを見ていない = 次に開いた時に新しい中身が出る
+    var busy = T.details.some(function (id) { var el = d.getElementById(id); return el && !el.hidden; });
+    var btn = busy ? null : d.querySelector(T.btn);
+    if (!btn || btn.disabled) { if (tries < 20) setTimeout(function () { swapScreen(key, tries + 1); }, 1500); return; }
+    if (tabC[key]) tabC[key].swapUntil = Date.now() + 8000;
+    try { btn.click(); } catch (e) { /* 押せなければ次に開いた時に新しい中身が出る */ }
+  }
+  function tabBg(key) {
+    if (bgBusy[key]) return;
+    bgBusy[key] = true;
+    var tries = 0;
+    (function go() {
+      tabFetch(key, false).then(function (r) {
+        bgBusy[key] = false;
+        if (!r.kept) return;
+        if (key === 'troubles' && typeof root.setTroubleN === 'function') { try { root.setTroubleN(troubleCount(r.data)); } catch (e) { /* 数が出ないだけ */ } }
+        if (r.changed) swapScreen(key);
+      }, function (e) {
+        if (e && e.network && ++tries < 2) { setTimeout(go, 1500); return; }
+        bgBusy[key] = false;                                             // 取り直せなくても今ある控えは見られる。次に開いた時にまた試す
+      });
+    })();
+  }
+  // o.force = 更新ボタン (取り直すまで待つ)・o.cachedOnly = 裏の取り直しを始めない (Status の 4 行目が使う Order の控え)
+  function tabShow(key, o) {
+    o = o || {};
+    var T = TABS[key];
+    return load().then(function () {
+      var c = tabC[key];
+      if (o.force) {
+        if (c && c.swapUntil > Date.now()) return clone(c.data);             // 差し替えの直後に画面が押した更新 = 届いたばかりの中身
+        return tabFetch(key, true).then(function (r) { return clone(r.data); });
+      }
+      if (c) {
+        if (!o.cachedOnly && !(c.at && Date.now() - c.at < T.ttl)) tabBg(key);
+        return clone(c.data);
+      }
+      if (!T.cold) return tabFetch(key, false).then(function (r) { return clone(r.data); });
+      return once(key + ':cold', function () { return T.cold(); }).then(function (d) {
+        if (tabOk(key, d)) {
+          var fresh = !d.cached;
+          tabC[key] = { at: fresh ? Date.now() : 0, data: d, swapUntil: 0 };
+          tabPersist();
+          if (!fresh && !o.cachedOnly) tabBg(key);
+        }
+        return clone(d);
+      });
+    });
+  }
+
   // ---------------------------------------------------------------- Order / Summary (第 2 段)
-  var SALES_TTL_MS = 20 * 1000, SUMMARY_TTL_MS = 5 * 60 * 1000;
   function queryOf(path, name) {
     var m = String(path).match(new RegExp('[?&]' + name + '=([^&]*)'));
     if (!m) return '';
     try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return m[1]; }
   }
-  function summary(fresh) {
-    if (!fresh && summaryC && Date.now() - summaryC.at < SUMMARY_TTL_MS) return Promise.resolve(clone(summaryC.data));
-    return gasOk('summary', {}, { lane: 'sales' }).then(function (r) { summaryC = { at: Date.now(), data: r }; return clone(r); });
-  }
-  function salesList() {
-    if (salesC && Date.now() - salesC.at < SALES_TTL_MS) return Promise.resolve(clone(salesC.data));
-    return gasOk('sales', { fresh: true }, { lane: 'sales', timeout: STATE_TIMEOUT_MS }).then(function (r) { salesC = { at: Date.now(), data: r }; return clone(r); });
-  }
+  function summary(fresh) { return tabShow('summary', { force: fresh }); }
+  function salesList(cachedOnly) { return tabShow('sales', { cachedOnly: cachedOnly }); }
   function salesRead(key) {
     return gas('sales_read', { key: key }).then(function (j) {
-      if (j.ok && salesC) (salesC.data.items || []).forEach(function (it) { if (it.key === key) it.unread = false; });
+      if (j.ok && tabC.sales) { (tabC.sales.data.items || []).forEach(function (it) { if (it.key === key) it.unread = false; }); tabPersist(); }
       return j;
     });
   }
 
   // ---------------------------------------------------------------- Status (第 3 段)
-  var TROUBLE_TTL_MS = 20 * 1000, CPASS_TTL_MS = 10 * 60 * 1000;
-  // GAS は前回から 10 分以内なら eBay を呼ばず控えを返す (?fresh=1 = 更新ボタンは飛ばす)。?badge=1 = タブの件数だけ (控えを返す・eBay は呼ばない)
-  function troubles(path) {
-    // 起動時のタブの件数 (app.js が ?badge=1 を付ける) も、ZBook と同じく普通に取る: 前回から 10 分を過ぎていれば eBay を取り直す (GAS が 10 分の間隔を守る)
-    var fresh = /[?&]fresh=1/.test(path);
-    if (!fresh && troubleC && Date.now() - troubleC.at < TROUBLE_TTL_MS) return Promise.resolve(clone(troubleC.data));
-    // ok:false でも error と控えを画面が読む (ZBook と同じ・gas で素通し)
-    return gas('troubles', { fresh: fresh }, { lane: 'trouble', timeout: STATE_TIMEOUT_MS }).then(function (j) {
-      if (j.ok) troubleC = { at: Date.now(), data: j };
-      return clone(j);
-    });
-  }
+  var CPASS_TTL_MS = 10 * 60 * 1000;
+  // GAS は前回から 10 分以内なら eBay を呼ばず前回の画面を返す (?fresh=1 = 更新ボタンは飛ばす)。起動時のタブの件数 (?badge=1) も同じ控えから出し、古ければ裏で取り直して件数を直す
+  function troubles(path) { return tabShow('troubles', { force: /[?&]fresh=1/.test(path) }); }
   function cpassTrack(oc) {
     var c = cpassC[oc];
     if (c && Date.now() - c.at < CPASS_TTL_MS) return Promise.resolve(clone(c.data));
@@ -676,8 +791,7 @@
     if (method === 'GET' && p === '/api/summary') return summary(/[?&]fresh=1/.test(path));
     if (method === 'GET' && p === '/api/sales') {
       // Status の 4 行目の材料 (app.js が ?cached=1 を付ける)。ZBook はサーバーが持つ Order の控えを返す = 端末に控えが無ければ普通に取る (開いた時と同じ・20 秒の控えと GAS の控えが効く)
-      if (/[?&]cached=1/.test(path) && salesC) return Promise.resolve(clone(salesC.data));
-      return salesList();
+      return salesList(/[?&]cached=1/.test(path));
     }
     if (method === 'GET' && p === '/api/troubles') return troubles(path);
     if (method === 'GET' && p === '/api/cpass-track') return cpassTrack(queryOf(path, 'oc'));
@@ -708,13 +822,13 @@
       return salesRead(String(b.key));
     }
     if (p === '/api/sales-cost') {            // ok:false でも now_cost / now_ship を画面が読む (gas で素通し)。書いた後・シートが変わっていた後は一覧を取り直す
-      return gas('sales_cost', { row: b.row, item_id: b.item_id, old_cost: b.old_cost, old_ship: b.old_ship, cost: b.cost, ship: b.ship }).then(function (j) { salesC = null; return j; });
+      return gas('sales_cost', { row: b.row, item_id: b.item_id, old_cost: b.old_cost, old_ship: b.old_ship, cost: b.cost, ship: b.ship }).then(function (j) { tabDrop('sales'); return j; });
     }
-    if (p === '/api/sales-match') return gas('sales_match', { row: b.row, order_id: b.order_id, item_id: b.item_id }).then(function (j) { salesC = null; return j; });
+    if (p === '/api/sales-match') return gas('sales_match', { row: b.row, order_id: b.order_id, item_id: b.item_id }).then(function (j) { tabDrop('sales'); return j; });
     if (p === '/api/item-pics') return gasOk('item_pics', { ids: b.ids || [] });
     if (p === '/api/trouble-archive') {
       if (!b.kind || !b.id) { var er3 = new Error('種類か ID がありません'); er3.status = 400; return Promise.reject(er3); }
-      return gas('trouble_archive', { kind: b.kind, id: b.id }).then(function (j) { troubleC = null; return j; });
+      return gas('trouble_archive', { kind: b.kind, id: b.id }).then(function (j) { tabDrop('troubles'); return j; });
     }
     if (p === '/api/trouble-draft') return viaTark('ai_trouble', b, function () { return troubleDraft(b); });
     if (p === '/api/item-offer-guess') return itemGuess(b);
@@ -728,7 +842,7 @@
   }
 
   var api = { call: call, _t: { mask: mask, unmask: unmask, maskPlain: maskPlain, isJapanese: isJapanese, decorate: decorate, adopt: adopt, pathOf: pathOf,
-    state: function () { return state; }, reset: function () { state = null; freshP = null; } } };
+    state: function () { return state; }, reset: function () { state = null; freshP = null; tabC = {}; flights = {}; bgBusy = {}; }, tabs: function () { return tabC; } } };
   root.MailGas = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
