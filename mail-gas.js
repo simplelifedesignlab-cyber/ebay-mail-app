@@ -412,6 +412,34 @@
     });
   }
 
+  // ---------------------------------------------------------------- Tark 経路 (2026-10-21 夜・オーナーの GAS だけ)
+  // Tark の決まり・案件台帳・過去の返信の手本を Drive から読める GAS (ai_caps が tark:true) では、方針案/日本語案/書き直し/訳/Status の英文案を GAS 側で作る (ZBook の mail_ai.py と同じ中身)。
+  // 読めない GAS (配布先) は今までどおりこの端末の汎用版の文面で Claude を呼ぶ。caps が取れない (通信失敗) 時は汎用版へ戻す (決めつけない・次の呼び出しでもう一度見る)
+  var tarkCaps = null;
+  function tarkOn() {
+    if (tarkCaps !== null) return Promise.resolve(tarkCaps);
+    return gas('ai_caps', {}, { lane: 'par' }).then(function (j) {
+      tarkCaps = !!(j && j.ok && j.tark);
+      return tarkCaps;
+    }, function () { return false; });
+  }
+  function viaTark(action, payload, generic, soft) {
+    return tarkOn().then(function (on) {
+      if (!on) return generic();
+      return gas(action, payload, { lane: 'par', noAbort: true }).then(function (j) {
+        if (j.ok || soft) return j;
+        throw new Error(j.message || j.error || '失敗しました');
+      });
+    });
+  }
+  // 台帳への記録: 送信成功の直後に画面が呼ぶ。Tark を読めない GAS では記録しない (今までどおり)
+  function ledgerRecord(b) {
+    return tarkOn().then(function (on) {
+      if (!on) return { ok: true, message: '台帳への記録は配布版では行いません' };
+      return gas('ledger', { mid: b.mid, body: b.body, ja: b.ja }, { lane: 'par', noAbort: true });
+    });
+  }
+
   // ---------------------------------------------------------------- 送信
   function send(b) {
     return load().then(function () {
@@ -661,11 +689,11 @@
     if (method !== 'POST') return unsupported(path);
     if (p === '/api/done') return gas('done', { mid: b.mid }).then(function (j) { if (j.ok && state) { var t = findThread(b.mid); if (t) t.open = false; bump(); } return j; });
     if (p === '/api/send') return send(b);
-    if (p === '/api/ai-options') return aiOptions(b.mid, b.memo);
-    if (p === '/api/ai-draft') return aiDraft(b.mid, b.memo, b.option, b.extra);
-    if (p === '/api/ai-rewrite') return aiRewrite(b.mid, b.ja, b.option);
-    if (p === '/api/translate') return aiTranslate(b.mid, b.ja);
-    if (p === '/api/ledger') return Promise.resolve({ ok: true, message: '台帳への記録は配布版では行いません' });
+    if (p === '/api/ai-options') return viaTark('ai_options', { mid: b.mid, memo: b.memo }, function () { return aiOptions(b.mid, b.memo); });
+    if (p === '/api/ai-draft') return viaTark('ai_draft', { mid: b.mid, memo: b.memo, option: b.option, extra: b.extra }, function () { return aiDraft(b.mid, b.memo, b.option, b.extra); });
+    if (p === '/api/ai-rewrite') return viaTark('ai_rewrite', { mid: b.mid, ja: b.ja, option: b.option }, function () { return aiRewrite(b.mid, b.ja, b.option); });
+    if (p === '/api/translate') return viaTark('ai_translate', { mid: b.mid, ja: b.ja }, function () { return aiTranslate(b.mid, b.ja); }, true);
+    if (p === '/api/ledger') return ledgerRecord(b);
     if (p === '/api/offer-url') return gas('offer_url', { mid: b.mid, itemId: b.itemId, buyer: b.buyer });
     if (p === '/api/mail-read') {
       return load().then(function () {
@@ -688,7 +716,7 @@
       if (!b.kind || !b.id) { var er3 = new Error('種類か ID がありません'); er3.status = 400; return Promise.reject(er3); }
       return gas('trouble_archive', { kind: b.kind, id: b.id }).then(function (j) { troubleC = null; return j; });
     }
-    if (p === '/api/trouble-draft') return troubleDraft(b);
+    if (p === '/api/trouble-draft') return viaTark('ai_trouble', b, function () { return troubleDraft(b); });
     if (p === '/api/item-offer-guess') return itemGuess(b);
     if (p === '/api/retranslate') return retranslate(b.mid);
     if (p === '/api/item-calc') return itemGet('item_calc', b);
