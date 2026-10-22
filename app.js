@@ -1985,6 +1985,7 @@ var ItemsUi = (function () {
     shipI.value = it.cod == null ? '' : String(it.cod);
     blankOnFocus(costI); blankOnFocus(shipI);
     var pushUsd = null, notes = el('div'), wr = el('div', 'inote'), msg = el('div', 'inote');   // pushUsd = 「eBay へ反映」で W に書く US の額 (希望額がある時の判定額)
+    var sline = oneLine();   // シートへ書いた結果の小さい 1 行 (「Sheet J ← ¥82,500」)・Details を開かなくても見える
     function updBtn(kind, inputEl, name) {
       var b = el('button', 'iupd');
       b.type = 'button'; b.title = name + 'をシートに書き込む'; b.setAttribute('aria-label', name + 'をシートに書き込む');
@@ -1998,15 +1999,16 @@ var ItemsUi = (function () {
         clearTimeout(t2);
         var v = num(inputEl.value);
         if (!b.canPress()) return;
-        if (!window.confirm('スプレッドシートの' + name + 'を ' + yen(writ[kind]) + ' → ' + yen(v) + ' に書き換えます')) return;
+        if (!b.noConfirm && !window.confirm('スプレッドシートの' + name + 'を ' + yen(writ[kind]) + ' → ' + yen(v) + ' に書き換えます')) return;
         var was = writ[kind];
         ed.setBusy(true); wr.className = 'inote'; wr.textContent = 'シートを書き換えています…';
         apiCall('POST', kind === 'cost' ? '/api/item-cost' : '/api/item-ship', { item_id: String(it.item_id), old: was, new: v }).then(function (r) {
           ed.setBusy(false);
-          if (!r.ok) { wr.className = 'inote ng'; wr.textContent = 'シートを書き換えられませんでした: ' + r.message; recalc(); return; }
+          if (!r.ok) { wr.className = 'inote ng'; wr.textContent = 'シートを書き換えられませんでした: ' + r.message; sline.className = 'inote ng'; sline.textContent = r.message; recalc(); return; }
+          sline.className = 'inote'; sline.textContent = 'Sheet ' + (kind === 'cost' ? 'J' : 'K') + ' ← ' + yen(v); if (b.onWritten) b.onWritten();
           wr.className = 'inote'; wr.textContent = 'シートの' + name + 'を ' + yen(was) + ' → ' + yen(v) + ' に書き換えました (' + r.row + ' 行目。US の売価はシートの再計算後に変わります)';
           writ[kind] = v; ed.refresh(); recalc();
-        }).catch(function (e) { ed.setBusy(false); wr.className = 'inote ng'; wr.textContent = 'シートを書き換えられませんでした: ' + msgOf(e); recalc(); });
+        }).catch(function (e) { ed.setBusy(false); wr.className = 'inote ng'; wr.textContent = 'シートを書き換えられませんでした: ' + msgOf(e); sline.className = 'inote ng'; sline.textContent = msgOf(e); recalc(); });
       };
       return b;
     }
@@ -2020,12 +2022,18 @@ var ItemsUi = (function () {
     cr1.appendChild(lab('仕入')); cr1.appendChild(costI); cr2.appendChild(lab('送料')); cr2.appendChild(shipI);
     [costI, shipI].forEach(function (i) { i.style.minWidth = '0'; i.style.width = '0'; i.style.padding = '0 6px'; });
     cc.appendChild(cr1); sc2.appendChild(cr2); cs.appendChild(cc); cs.appendChild(sc2);
-    box.appendChild(cs);
+    box.appendChild(cs); box.appendChild(sline);
     if (it.src_price != null && it.src_price > 0 && it.src_price !== it.cost) {
       var sc = el('button', 'schip', '最新仕入 ' + yen(it.src_price) + ' で更新');
       sc.type = 'button';
       sc.style.cssText = 'margin:0 0 4px;padding:2px 8px;font-size:var(--fs-small);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis';
-      sc.onclick = function () { costI.value = String(it.src_price); costI.dispatchEvent(new Event('input')); };
+      // 押すと仕入の箱に入れ、利益計算表の仕入価格 (J) も書く。書く経路は Details の Sheet の仕入の更新アイコンと同じ (/api/item-cost: 行は G の ItemID で今のシートを読み直して探し、1 行だけ・J が画面の値と同じ時だけ書く)。確認は出さない。ミラーを開いていても it は親 (US) の行
+      sc.onclick = function () {
+        if (!costB.canPress) return;
+        costI.value = String(it.src_price); costI.dispatchEvent(new Event('input'));
+        costB.noConfirm = true; costB.onclick(); costB.noConfirm = false;
+      };
+      costB.onWritten = function () { sc.hidden = true; };
       cc.appendChild(sc);
     }
     // 3. Details: 見出しごとに Countries / Breakeven & 5% off / Why / Sheet / eBay へ反映
