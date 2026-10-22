@@ -1936,7 +1936,7 @@ var ItemsUi = (function () {
     }
     box.appendChild(rpw);
     // Template: テンプレを 3 つに絞った選択のシート。1 つ選ぶ → その下に [SendMail] → 押すと送って、すぐ閉じる (Template を押しただけでは送らない)
-    var TPL3 = ['5% Offer in Sale (US)', '5% Offer in Sale (WorldWide)', '5% Offer (Popular)'];
+    var TPL3 = ['5% Offer in Sale (US)', '5% Offer no Sale (US)', '5% Offer (Popular)'];
     function openSheet() {
       var host = $('itemView');
       if (!host || host.querySelector('.tsheet')) return;
