@@ -1879,6 +1879,36 @@ var ItemsUi = (function () {
     row('差額%', wrap(null, dcI, '%'));
     box.appendChild(el('div', 'sline'));
     var out = row('BUYER 希望での利益', el('span', null, '-'), true);
+    // ---- お断り判定 (2026-10-22 ユーザー指示): 自動お断りと同じ計算をサーバー (reply_decline.panel_calc・/api/decline-calc) で手でも使う。式は JS に写さない。
+    //   入力 = 上の BUYER 希望価格 (問い合わせ国の通貨)。空なら 5% 引き。会話を開いて欄が空なら、本文から拾った希望額を初めから入れる
+    box.appendChild(el('div', 'sline'));
+    var dj = row('お断り判定', el('span', null, '-'), true), dl = row('出品の売価', el('span', null, '-')), dr = row('希望額', el('span', null, '-'));
+    var dpar = row('US 親の売価', el('span', null, '-')), dus = row('US 換算の額', el('span', null, '-')), dfx = row('1 USD =', el('span', null, '-'));
+    var dpf = row('その額での利益', el('span', null, '-')), dbe = row('損益分岐 (利益 0 円)', el('span', null, '-')), d5 = row('5% 引き', el('span', null, '-'));
+    var dmsg = el('div', 'inote'); box.appendChild(dmsg);
+    var dAuto = true, dSeq = 0;
+    function cm(cur, n) { return n == null ? '-' : (cur === 'USD' ? usd(n) : cur + ' ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }
+    function dshow(node, on) { node.parentNode.style.display = on ? '' : 'none'; }
+    function declineCalc() {
+      var my = ++dSeq, rq = ofI.value.trim().replace(/,/g, ''), auto = dAuto && rq === '';
+      dAuto = false;
+      apiCall('POST', '/api/decline-calc', { mid: (from && from.t && from.t.mid) || '', item_id: String(it.item_id || ''), requested: rq, auto: auto }).then(function (r) {
+        if (my !== dSeq) return;
+        if (!r.ok) { [dl, dr, dpar, dus, dfx, dpf, dbe, d5].forEach(function (n) { n.textContent = '-'; }); dj.textContent = '-'; dj.classList.remove('neg'); dmsg.className = 'inote ng'; dmsg.textContent = '判定できません: ' + r.message; return; }
+        if (auto && r.suggested != null && ofI.value.trim() === '') { ofI.value = String(r.suggested); ofI.oninput(); return; }   // 本文から拾った希望額を入れて計算し直す
+        var dec = r.action === 'decline';
+        dj.textContent = dec ? '自動お断りのライン (利益 0 円以下)' : '黒字 (5% 案)'; dj.classList.toggle('neg', dec);
+        dl.textContent = cm(r.currency, r.list_price);
+        dr.textContent = r.requested ? cm(r.currency, r.requested) + ' (売価の ' + pc(r.pct_off) + ' 引き)' : '希望額なし (5% 引きで判定)';
+        dshow(dpar, r.mirror); dshow(dfx, r.mirror);
+        if (r.mirror) { dpar.textContent = usd(r.parent_price) + ' (親 ' + r.parent_id + ')'; dfx.textContent = r.per_usd.toFixed(4) + ' ' + r.currency; }
+        dus.textContent = usd(r.usd_used) + (r.mirror ? ' (親の売価 x 比率)' : '');
+        dpf.textContent = yen(r.profit_yen) + ' (' + pc(r.rate) + ')'; dpf.classList.toggle('neg', r.profit_yen < 0);
+        dbe.textContent = r.breakeven_usd == null ? '届きません' : cm(r.currency, r.breakeven_local) + (r.mirror ? ' / ' + usd(r.breakeven_usd) : '') + ' (売価の ' + pc(r.breakeven_pct_off) + ' 引き)';
+        d5.textContent = cm(r.currency, r.five_local) + (r.mirror ? ' / US 換算 ' + usd(r.parent_price * 0.95) : '');
+        dmsg.className = 'inote'; dmsg.textContent = r.fx || ('利益計算表 ' + r.row + ' 行目で ' + r.basis + ' の額 ' + usd(r.usd_used) + ' の利益を計算');
+      }).catch(function (e) { if (my === dSeq) { dmsg.className = 'inote ng'; dmsg.textContent = 'お断り判定を取れませんでした: ' + msgOf(e); } });
+    }
     var pushBtn = el('button', 'irp', 'eBay へ反映');   // BUYER 希望価格 (US 額) を W (販売価格・手動) に書き、G に ItemID を貼り直したのと同じ処理で eBay へ送る (GAS の reset)
     var rpw = el('div', 'rpw');
     rpw.appendChild(pushBtn);
@@ -1908,6 +1938,7 @@ var ItemsUi = (function () {
     function fail(t) { pushUsd = null; ed.refresh(); out.textContent = '-'; out.classList.remove('neg'); msg.className = 'inote ng'; msg.textContent = t; }
     function recalc() {
       var my = ++seqC, rtxt = rin.value.trim(), rv = rtxt === '' ? null : num(rtxt) / 100;
+      declineCalc();
       if (rtxt !== '' && rv === null) { fail('利益率は数字で入れてください'); return Promise.resolve(); }
       var lp = lpI.value.trim().replace(/,/g, '');
       var body = { row: it.row, mode: 'other', rate: rv, list_price: lp === '' ? it.price : lp, offer: ofI.value.trim().replace(/,/g, '') };
