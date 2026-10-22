@@ -368,3 +368,8 @@ body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{font-si
 #threadView .pbtn button.sd{background:#fff;color:#111;border:1px solid #111}#threadView .pbtn button.f-bk,.pbtn button.f-bk{background:#1c1c1e;color:#fff}
 /* キーボード上の帯 (2026-10-22): Generate / Direct / Done を iOS の補助バーのすぐ上へ。bottom は visualViewport から JS が決める */
 .btns.kbar{position:fixed;left:0;right:0;bottom:0;margin:0;padding:8px 12px;background:#fff;border-top:1px solid #e5e5e5;z-index:50}.btns.kbar[hidden]{display:none}.btns.kbar button{flex:1;padding:0 8px}
+
+/* 2026-10-22 計算カード v2: 在庫の 3 ボタン (青 / 緑 / 赤) と、利益 0 以下の時に赤くなるお断りボタン */
+.stk{display:flex;gap:6px;margin:2px 0 4px}.stb{flex:1;min-width:0;height:30px;border:0;border-radius:999px;color:#fff;font:inherit;font-size:var(--fs-btn);font-weight:700;white-space:nowrap;cursor:pointer;padding:0 6px}
+.stb.oos{background:var(--blue)}.stb.ins{background:#1a8f3c}.stb.end{background:var(--red)}.stb:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}
+.irp.irr{background:var(--red);color:#fff}.irp.irr:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}
