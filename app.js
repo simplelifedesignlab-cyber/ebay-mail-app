@@ -518,7 +518,7 @@ function startClient(DATA) {
     var thumbs = el('div', 'thumbs'); thumbs.id = 'thumbs';
     var panel = el('div', 'panel'); panel.id = 'panel'; panel.hidden = true;
     var ta = el('textarea'); ta.id = 'ta'; ta.placeholder = '日本語で書く (AI は要点だけでも・空でも可)'; ta.value = ''; ta.hidden = true; boxOpened = false; lastOpt = null;
-    // 2026-10-16 ユーザー指示: Typing の窓から戻れない → 窓の右上に薄い小さな × (押すと閉じる = Cancel と同じ)
+    // 2026-10-16 ユーザー指示: Typing の窓から戻れない → 窓の右上に薄い小さな × (押すと閉じる = Cancel と同じ)。2026-10-22: 黒い丸に白の × で大きく
     var taw = el('div', 'taw'), tax = el('span', 'tax', '×'); tax.title = '閉じる'; tax.onclick = function () { finCancel(); };
     taw.appendChild(ta); taw.appendChild(tax);
     var warn = el('div', 'msg ng'); warn.id = 'warn';
@@ -555,6 +555,17 @@ function startClient(DATA) {
       }).withFailureHandler(function (e) { tb.disabled = false; fail(e); }).repliesAiDraft(cur.mid, aiMemo, null, memo, TOKEN);
     };
     bRt.id = 'bRt'; bRt.onclick = doRetranslate; bAi.onclick = doAi; bTp.onclick = doTpl; bBl.onclick = doBlock; bOf.onclick = doOffer;
+    // 2026-10-22 ユーザー指示 (iPhone): キーボードを開いたまま Generate / Direct / Done を押せるよう、キーボードのすぐ上に同じ 3 つを帯で出す (中身は下のボタンを押すだけ = 処理の重複なし)
+    var kbar = el('div', 'btns kbar'); kbar.id = 'kbar'; kbar.hidden = true;
+    [['kG', 'Generate', 'f-rg', tb], ['kD', 'Direct', 'f-rg', dsd], ['kN', 'Done', null, $('db') || db]].forEach(function (d) {
+      if (!d[3]) return;
+      var kb = el('button', d[2], d[1]); kb.id = d[0]; kb.type = 'button';
+      kb.onmousedown = function (e) { e.preventDefault(); };   // 入力窓の blur で帯が消えて押下を取りこぼさない
+      kb.onpointerdown = function (e) { kbarHold(); };
+      kb.onclick = function () { kbarHold(); d[3].onclick(); };
+      kbar.appendChild(kb);
+    });
+    root.appendChild(kbar); kbarInit();
     dsd.onclick = doDirect; bTy.onclick = function () { $('ta').value = ''; showBox(false); $('ta').focus(); };  // Typing は完全に空の窓 (下書きを入れない)
 
     $('listView').hidden = true;
@@ -582,12 +593,35 @@ function startClient(DATA) {
     mailRefreshIfWanted();
   }
 
+  // キーボード上の帯 (Generate / Direct / Done): ta にフォーカスがあり、visualViewport がキーボード分だけ縮んでいる間だけ出す。PC (縮まない) では出ない
+  var kbarOn = false, kbarHoldT = 0;
+  function kbarHold() { kbarHoldT = Date.now(); }
+  function kbarUpdate() {
+    var bar = $('kbar'), ta = $('ta'), vv = window.visualViewport;
+    if (!bar) return;
+    var fm = $('threadView').className.indexOf('fmode') >= 0;
+    var kb = vv ? Math.round(window.innerHeight - vv.height - vv.offsetTop) : 0;
+    var focus = ta && document.activeElement === ta && !ta.hidden;
+    var show = !!vv && !fm && kb > 100 && (focus || Date.now() - kbarHoldT < 600);
+    bar.hidden = !show;
+    if (show) bar.style.bottom = Math.max(0, kb) + 'px';
+  }
+  function kbarInit() {
+    if (!kbarOn) {
+      kbarOn = true;
+      if (window.visualViewport) { window.visualViewport.addEventListener('resize', kbarUpdate); window.visualViewport.addEventListener('scroll', kbarUpdate); }
+      document.addEventListener('focusin', function () { kbarUpdate(); });
+      document.addEventListener('focusout', function () { setTimeout(kbarUpdate, 250); });
+    }
+    chk(); kbarUpdate();
+  }
   function chk() {
     var ta = $('ta'), tb = $('tb');
     if (!ta) return;
     var empty = !ta.value.trim(), fm = $('threadView').className.indexOf('fmode') >= 0;
     tb.disabled = busyF || empty;
     if ($('db')) $('db').disabled = busyF;
+    [['kG', 'tb'], ['kD', 'dSd'], ['kN', 'db']].forEach(function (d) { if ($(d[0]) && $(d[1])) $(d[0]).disabled = $(d[1]).disabled; });
     if ($('sp')) $('sp').disabled = busyF || !atts.length;
     if ($('dSd')) $('dSd').disabled = busyF || sentF || empty;
     if ($('bRt')) $('bRt').disabled = busyF;

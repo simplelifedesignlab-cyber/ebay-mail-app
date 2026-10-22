@@ -358,11 +358,13 @@ body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{font-si
 .tools .t-ad,#threadView .tools .t-ad{font-size:26px}body.embed #threadView .tools .t-ad{font-size:20px}
 .th button{font-size:14px}.edge{font-size:22px}
 
-/* Typing の窓の右上の閉じる × (2026-10-16 ユーザー指示: ボタンではなく薄く小さく) */
-.taw{position:relative}.taw .tax{position:absolute;top:4px;right:10px;font-size:16px;line-height:1;color:#b3b3b3;cursor:pointer;user-select:none}.taw textarea[hidden]+.tax{display:none}
+/* Typing の窓の右上の閉じる × (2026-10-16 薄く小さく → 2026-10-22 ユーザー指示: 黒い丸に白の ×・32px) */
+.taw{position:relative}.taw .tax{position:absolute;top:6px;right:10px;width:32px;height:32px;border-radius:50%;background:#111;color:#fff;font-size:22px;line-height:32px;text-align:center;cursor:pointer;user-select:none}.taw textarea[hidden]+.tax{display:none}
 .trow3{display:flex;align-items:center;justify-content:space-between;gap:8px}.trow3 .cprow{flex:none;align-items:center}.trow3 .cprow>:first-child{flex:none}.tsup{flex:none;padding:0 6px;border:1px solid #cfcfcf;border-radius:6px;background:#fff;color:var(--mut);font:inherit;line-height:inherit;cursor:pointer}.tsup:active{background:#f1f1f1}
 .m.me.pend .bub{background:#fff;border:1px dashed #8f8f8f}#threadView .m.me.pend .bub{background:#fff}.pbtn{display:flex;gap:8px;width:100%}.pbtn button{flex:1;margin-top:8px;height:40px;border:0;border-radius:999px;font-weight:700;cursor:pointer;background:#f1f1f1;color:var(--ink)}#threadView .pbtn button.sd{background:#111;color:#fff;margin-top:8px}.pbtn button:disabled{opacity:.4;cursor:not-allowed}
 /* AI 返信案 (確認待ち): 一覧の AI 印は緑・吹き出しは黒地に白文字・ボタンは反転 */
 .shb.aig{background:#1e8e3e;color:#fff}
 .m.me.pend .bub,#threadView .m.me.pend .bub{background:#1c1c1e;color:#fff;border:0}.m.me.pend .bub .org{color:#c7c7cc}
 #threadView .pbtn button.sd{background:#fff;color:#111;border:1px solid #111}#threadView .pbtn button.f-bk,.pbtn button.f-bk{background:#1c1c1e;color:#fff}
+/* キーボード上の帯 (2026-10-22): Generate / Direct / Done を iOS の補助バーのすぐ上へ。bottom は visualViewport から JS が決める */
+.btns.kbar{position:fixed;left:0;right:0;bottom:0;margin:0;padding:8px 12px;background:#fff;border-top:1px solid #e5e5e5;z-index:50}.btns.kbar[hidden]{display:none}.btns.kbar button{flex:1;padding:0 8px}
