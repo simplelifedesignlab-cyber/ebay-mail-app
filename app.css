@@ -373,3 +373,8 @@ body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{font-si
 .stk{display:flex;gap:6px;margin:2px 0 4px}.stb{flex:1;min-width:0;height:30px;border:0;border-radius:999px;color:#fff;font:inherit;font-size:var(--fs-btn);font-weight:700;white-space:nowrap;cursor:pointer;padding:0 6px}
 .stb.oos{background:var(--blue)}.stb.ins{background:#1a8f3c}.stb.end{background:var(--red)}.stb:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}
 .irp.irr{background:var(--red);color:#fff}.irp.irr:disabled{background:#f1f1f1;color:#b3b3b3;cursor:not-allowed}
+
+/* 2026-10-22 v3: テンプレの選択のシート (商品画面の下に固定・右上に黒丸 ×) と Sent のトースト */
+.tsheet{position:fixed;left:0;right:0;bottom:0;max-height:62vh;overflow-y:auto;background:#fff;border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.12);padding:14px 16px 18px;z-index:60}.tsheet .cl2{font-weight:700;margin:0 0 6px;color:var(--mut)}
+.tsheet .opt{border-radius:999px;text-align:center;font-weight:700;padding:9px 12px}.tsheet .opt:disabled{cursor:not-allowed}.tsheet .opt.sel b::before{content:none}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;font-size:var(--fs-small);font-weight:700;border-radius:999px;padding:6px 16px;z-index:80;pointer-events:none}

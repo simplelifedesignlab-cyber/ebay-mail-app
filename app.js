@@ -849,10 +849,52 @@ function startClient(DATA) {
     offerOpen(t, Number(amt).toFixed(2));
   }
   // 商品画面の Template / Decline: 画面を閉じて会話に戻り、会話画面の同じボタンと同じ動きをする (Decline は確認なしでお断り US以外を送る)
+  // 2026-10-22 v3: Template / Decline は商品画面の上で完結する (会話画面へは戻らない)。送る経路は会話の Send と同じ repliesSend (+ 台帳の記録)。
+  var sending = {};
+  function tplByName(items, pred) { return (items || []).filter(pred)[0] || null; }
+  function sendTpl(t, tpl) {   // 英文 = D 列の定型の英語があればそれ・無ければ訳す (doDecline / テンプレ選択と同じ)。戻り値 Promise<{ok, message}>
+    if (sending[t.mid]) return Promise.resolve({ ok: false, message: '送信中です' });
+    sending[t.mid] = true;
+    return new Promise(function (resolve) {
+      function done(r) { delete sending[t.mid]; resolve(r); }
+      function go(enBody) {
+        GSR().withSuccessHandler(function (r) {
+          if (!r || !r.ok) { if (r && r.keepLocked) sending[t.mid] = true; resolve({ ok: false, message: (r && r.message) || '送れませんでした', keepLocked: !!(r && r.keepLocked) }); if (!(r && r.keepLocked)) delete sending[t.mid]; return; }
+          t.msgs.push({ id: 'local-' + Date.now(), who: 'me', at: new Date().toISOString(), text: enBody });
+          t.open = false; t.confirm = false;
+          GSR().withSuccessHandler(function () { }).withFailureHandler(function () { }).repliesLedgerRecord(t.mid, enBody, tpl.body, TOKEN);
+          done({ ok: true });
+        }).withFailureHandler(function (e) { done({ ok: false, message: '失敗: ' + (e && e.message ? e.message : e) + ' (送れたか確認できていません。会話を読み直してください)', keepLocked: true }); sending[t.mid] = true; })
+          .repliesSend(t.mid, enBody, TOKEN, []);
+      }
+      if (tpl.en) { go(tpl.en); return; }
+      GSR().withSuccessHandler(function (r) {
+        if (!r || !r.ok || !String(r.text || '').trim()) { done({ ok: false, message: (r && r.message) || '訳せませんでした' }); return; }
+        go(String(r.text).trim());
+      }).withFailureHandler(function (e) { done({ ok: false, message: '失敗: ' + (e && e.message ? e.message : e) }); }).repliesTranslate(t.mid, tpl.body, TOKEN);
+    });
+  }
   var itemHooks = {
     offer: itemOffer,
-    template: function (t) { if (cur === t) doTpl(); },
-    decline: function (t) { if (cur === t) doDecline(t); }
+    templates: function () { return new Promise(function (ok, ng) { loadTpl(ok, ng); }); },
+    sendTpl: sendTpl,
+    declineNow: function (t) {
+      return new Promise(function (ok, ng) { loadTpl(ok, ng); }).then(function (items) {
+        var hit = tplByName(items, function (n) { return String(n.name).indexOf('お断り') >= 0 && String(n.name).indexOf('US以外') >= 0; });
+        if (!hit) return { ok: false, message: 'テンプレ「お断り US以外」が見つかりません (シートの返信テンプレを確認)' };
+        return sendTpl(t, hit);
+      }, function (e) { return { ok: false, message: '失敗: ' + (e && e.message ? e.message : e) }; });
+    },
+    isSent: function (t) { var m = t.msgs && t.msgs[t.msgs.length - 1]; return !!(m && m.who === 'me'); },
+    // × : 商品画面を閉じた後に呼ぶ。会話を読み直して (送った物が吹き出しに出るように) 開き直す
+    close: function (t) {
+      function show() { var i = T.indexOf(cur === t || !cur ? t : cur); if (i < 0) i = T.indexOf(t); if (i >= 0) openThread(i, false); }
+      show();
+      apiCall('GET', '/api/state').then(function (d) {
+        var nt = (d.threads || []).filter(function (x) { return x.buyer === t.buyer && x.item_id === t.item_id; })[0];
+        if (nt && (nt.msgs || []).length >= t.msgs.length && (cur === t || !cur)) { var i = T.indexOf(t); if (i >= 0) { T[i] = nt; cur = nt; show(); } }
+      }).catch(function () { /* 読み直せなくても今の画面 (送った物は入れてある) を出している */ });
+    }
   };
   // 最終画面の 5% Offer: パネルを出さずに金額コピー+会話を開く (SendMail の後にそのまま押す想定)
   function finOffer() {
@@ -1633,6 +1675,12 @@ var ItemsUi = (function () {
     r.appendChild(s); scr.appendChild(r);
   }
 
+  function uToast(text) {   // 画面の下に小さく出して 2 秒で消す
+    var t = document.createElement('div');
+    t.className = 'toast'; t.textContent = text;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2000);
+  }
   var freshNext = false;   // 更新アイコンを押した直後の最初の計算だけ eBay の今の売価を取り直す
   function renderDetail(d, guess) {
     var it = d.item, scr = shell('Listing Management');
@@ -1683,7 +1731,7 @@ var ItemsUi = (function () {
     };
     // 商品検索窓 (2026-10-14): 自動の一致で違う商品が当たった時に、利益計算表から探して選び直す。/api/items と候補の選択 (pickCand) は商品タブの検索と同じ
     var qBox = el('div', 'sr isr'), qIn = el('input'), qStat = el('div', 'istat isst'), qRows = el('div'), qSeq = 0, qT = null;
-    qIn.type = 'search'; qIn.placeholder = '商品を探す (商品名 または ItemID)'; qIn.autocomplete = 'off';
+    qIn.type = 'search'; qIn.placeholder = '商品を探す (商品名 / ItemID)'; qIn.autocomplete = 'off';
     qBox.appendChild(qIn);
     qBox.style.cssText = 'flex:1;min-width:0;margin:0';
     // 更新アイコンは検索窓の右に 1 つだけ: シートの行・仕入れ値・送料・eBay の今の売価・計算を全部読み直す (一覧の更新ボタンと同じ見た目)
@@ -1698,7 +1746,17 @@ var ItemsUi = (function () {
         if ($('itemQ') && kw.trim()) search();
       }).catch(function (e) { rf.disabled = false; stNote.className = 'inote ng'; stNote.textContent = '失敗: ' + msgOf(e); });
     };
-    qrow.appendChild(qBox); qrow.appendChild(rf);
+    // 黒丸の × (Typing の窓と同じ .tax): 商品画面を閉じて元の画面へ。会話から開いた時は会話を読み直して開き直す
+    var xw = el('span', 'taw'), xb = el('span', 'tax', '×');
+    xw.style.cssText = 'flex:none;width:40px;height:40px'; xb.style.cssText = 'top:4px;right:4px';
+    xb.title = '閉じる'; xb.setAttribute('role', 'button'); xb.setAttribute('aria-label', '閉じる');
+    xb.onclick = function () {
+      var f = from;
+      closeDetail();
+      if (f && f.t && f.hooks && f.hooks.close) f.hooks.close(f.t);
+    };
+    xw.appendChild(xb);
+    qrow.appendChild(qBox); qrow.appendChild(rf); qrow.appendChild(xw);
     qIn.oninput = function () {
       clearTimeout(qT);
       qT = setTimeout(function () {
@@ -1724,8 +1782,14 @@ var ItemsUi = (function () {
       b.onclick = function () { if (b.canPress()) run(); };
       stBox.appendChild(b);
     }
-    stBtn('oos', 'Out Of Stock', function () { editCall(ed, '/api/item-stock', { item_id: targetId, qty: 0 }, stNote); });
-    stBtn('ins', 'In Stock', function () { editCall(ed, '/api/item-stock', { item_id: targetId, qty: 1 }, stNote); });
+    stBtn('oos', 'Out Of Stock', function () {
+      if (!window.confirm('この出品を在庫切れ (Out Of Stock・数量 0) にします。よろしいですか?')) return;
+      editCall(ed, '/api/item-stock', { item_id: targetId, qty: 0 }, stNote);
+    });
+    stBtn('ins', 'In Stock', function () {
+      if (!window.confirm('この出品を在庫あり (In Stock・数量 1) にします。よろしいですか?')) return;
+      editCall(ed, '/api/item-stock', { item_id: targetId, qty: 1 }, stNote);
+    });
     stBtn('end', 'End Listing', function () {
       if (!window.confirm('この出品を取り下げます (End Listing)。元に戻せません。よろしいですか?')) return;
       // 利益計算表に行がある出品 (US) は表の AC も書く既存の取り下げ。行が無い出品 (他国のミラー) は eBay の EndItem だけ
@@ -1848,15 +1912,63 @@ var ItemsUi = (function () {
     // 2. ボタン 3 つ (会話から開いた時だけ押せる)。動きは会話画面の同じボタンと同じ (Decline は確認なしで「お断り US以外」を送る)
     var rpw = el('div', 'rpw'), bTp = el('button', 'irp irg', 'Template'), bOf = el('button', 'irp irg', '5% Offer'), bDc = el('button', 'irp irg', 'Decline');
     [bTp, bOf, bDc].forEach(function (b) { b.type = 'button'; rpw.appendChild(b); if (!(th && hooks)) b.disabled = true; });
+    // Decline: 赤 = 利益が 0 円以下で まだ返信を送っていない時だけ。送ってある (自動お断り・手で送った) 会話は灰色で押せない。押したら確認なしですぐ送り、Sent を出す
+    var declSent = !!(th && hooks && hooks.isSent && hooks.isSent(th)), lastProfit = null;
+    function paintDc() {
+      bDc.className = 'irp ' + (!declSent && lastProfit !== null && lastProfit <= 0 ? 'irr' : 'irg');
+      bDc.disabled = !(th && hooks) || declSent || !it.calc_ok;
+    }
     if (th && hooks) {
-      bTp.onclick = function () { closeDetail(); hooks.template(th); };
-      bDc.onclick = function () { closeDetail(); hooks.decline(th); };
+      bTp.onclick = function () { openSheet(); };
+      bDc.onclick = function () {
+        if (declSent) return;
+        bDc.disabled = true;
+        dmsg.className = 'inote'; dmsg.textContent = '送っています…';
+        hooks.declineNow(th).then(function (r) {
+          if (r.ok) { declSent = true; dmsg.textContent = ''; uToast('Sent'); } else { dmsg.className = 'inote ng'; dmsg.textContent = r.message; declSent = !!r.keepLocked; }
+          paintDc();
+        });
+      };
       bOf.onclick = function () {
         if (!last || !(last.five_local > 0)) { dmsg.className = 'inote ng'; dmsg.textContent = '5% 引きの額を計算できていません'; return; }
         closeDetail(); hooks.offer(th, Math.round(last.five_local * 100) / 100, last.currency);
       };
     }
     box.appendChild(rpw);
+    // Template: テンプレを 3 つに絞った選択のシート。1 つ選ぶ → その下に [SendMail] → 押すと送って、すぐ閉じる (Template を押しただけでは送らない)
+    var TPL3 = ['5% Offer in Sale (US)', '5% Offer in Sale (WorldWide)', '5% Offer (Popular)'];
+    function openSheet() {
+      var host = $('itemView');
+      if (!host || host.querySelector('.tsheet')) return;
+      var sh = el('div', 'tsheet'), pw = el('div', 'pxw'), x = el('span', 'tax', '×'), picked = null, btns = [];
+      x.title = '閉じる'; x.onclick = function () { sh.remove(); };
+      pw.appendChild(x); sh.appendChild(pw);
+      sh.appendChild(el('div', 'cl2', 'Template'));
+      var list = el('div'), send = el('button', 'irp', 'SendMail'), snote = el('div', 'inote');
+      send.type = 'button'; send.disabled = true;
+      sh.appendChild(list); sh.appendChild(send); sh.appendChild(snote);
+      host.appendChild(sh);
+      snote.textContent = '読んでいます…';
+      hooks.templates().then(function (items) {
+        snote.textContent = '';
+        TPL3.forEach(function (nm) {
+          var tpl = tplByNameUi(items, nm), b = el('button', 'opt', nm);
+          b.type = 'button'; btns.push(b); list.appendChild(b);
+          if (!tpl) { b.disabled = true; b.title = 'シートの返信テンプレに この名前がありません'; b.style.color = '#b3b3b3'; return; }
+          b.onclick = function () { picked = tpl; btns.forEach(function (o) { o.classList.toggle('sel', o === b); }); send.disabled = false; };
+        });
+      }, function (e) { snote.className = 'inote ng'; snote.textContent = '失敗: ' + msgOf(e); });
+      send.onclick = function () {
+        if (!picked) return;
+        var tpl = picked;
+        sh.remove();                                        // 押したらすぐ閉じる
+        dmsg.className = 'inote'; dmsg.textContent = '送っています…';
+        hooks.sendTpl(th, tpl).then(function (r) {
+          if (r.ok) { dmsg.textContent = ''; uToast('Sent'); declSent = true; paintDc(); } else { dmsg.className = 'inote ng'; dmsg.textContent = r.message; }
+        });
+      };
+    }
+    function tplByNameUi(items, nm) { return (items || []).filter(function (n) { return n.name === nm; })[0] || null; }
     // 3a/3b. 小さい字: US の売価 / 利益 / 利益% と、ミラーがある国の行
     var usLine = oneLine(), shLine = el('div', 'inote'), ctBox = el('div');
     usLine.textContent = 'US -';
@@ -1949,7 +2061,7 @@ var ItemsUi = (function () {
       if (sv !== null && sv !== sheetShip) body.ship = sv;
       return '';
     }
-    function dfail(t) { pushUsd = null; ed.refresh(); vProfit.textContent = '-'; vProfit.classList.remove('neg'); vPct.textContent = ''; vOff.textContent = ''; bDc.className = 'irp irg'; dmsg.className = 'inote ng'; dmsg.textContent = t; }
+    function dfail(t) { pushUsd = null; ed.refresh(); vProfit.textContent = '-'; vProfit.classList.remove('neg'); vPct.textContent = ''; vOff.textContent = ''; lastProfit = null; paintDc(); dmsg.className = 'inote ng'; dmsg.textContent = t; }
     function declineCalc() {
       var my = ++dSeq, rq = ofI.value.trim().replace(/,/g, ''), auto = dAuto && rq === '';
       dAuto = false;
@@ -1971,7 +2083,7 @@ var ItemsUi = (function () {
         vProfit.textContent = yen(r.profit_yen); vProfit.classList.toggle('neg', r.profit_yen < 0);
         vPct.textContent = '(' + pc(r.rate) + ')';
         vOff.textContent = (Math.round(r.pct_off * 1000) / 10) + '% off';
-        bDc.className = 'irp ' + (r.profit_yen <= 0 ? 'irr' : 'irg');   // 利益が 0 以下なら赤
+        lastProfit = r.profit_yen; if (r.already_sent) declSent = true; paintDc();
         dmsg.className = 'inote'; dmsg.textContent = '';
         usLine.textContent = 'US ' + usd(r.us_price) + ' / ' + yen(r.us_profit) + ' / ' + pc(r.us_rate, 0);
         shLine.textContent = r.sheet_older ? 'Sheet ' + usd(r.sheet_price) + ' is stale (eBay ' + usd(r.us_price) + ')' : 'Sheet ' + usd(r.sheet_price);
