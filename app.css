@@ -359,7 +359,7 @@ body.embed .itv input,body.embed .itv select,body.embed .itv .srow input{font-si
 .th button{font-size:14px}.edge{font-size:22px}
 
 /* Typing の窓の右上の閉じる × (2026-10-16 薄く小さく → 2026-10-22 ユーザー指示: 黒い丸に白の ×・32px) */
-.taw{position:relative}.taw .tax{position:absolute;top:6px;right:10px;width:32px;height:32px;border-radius:50%;background:#111;color:#fff;font-size:22px;line-height:32px;text-align:center;cursor:pointer;user-select:none}.taw textarea[hidden]+.tax{display:none}
+.taw{position:relative}.pxw{position:sticky;top:0;height:0;z-index:2}.taw .tax,.pxw .tax{position:absolute;top:6px;right:10px;width:32px;height:32px;border-radius:50%;background:#111;color:#fff;font-size:22px;line-height:32px;text-align:center;cursor:pointer;user-select:none}.taw textarea[hidden]+.tax{display:none}
 .trow3{display:flex;align-items:center;justify-content:space-between;gap:8px}.trow3 .cprow{flex:none;align-items:center}.trow3 .cprow>:first-child{flex:none}.tsup{flex:none;padding:0 6px;border:1px solid #cfcfcf;border-radius:6px;background:#fff;color:var(--mut);font:inherit;line-height:inherit;cursor:pointer}.tsup:active{background:#f1f1f1}
 .m.me.pend .bub{background:#fff;border:1px dashed #8f8f8f}#threadView .m.me.pend .bub{background:#fff}.pbtn{display:flex;gap:8px;width:100%}.pbtn button{flex:1;margin-top:8px;height:40px;border:0;border-radius:999px;font-weight:700;cursor:pointer;background:#f1f1f1;color:var(--ink)}#threadView .pbtn button.sd{background:#111;color:#fff;margin-top:8px}.pbtn button:disabled{opacity:.4;cursor:not-allowed}
 /* AI 返信案 (確認待ち): 一覧の AI 印は緑・吹き出しは黒地に白文字・ボタンは反転 */

@@ -373,11 +373,14 @@ function startClient(DATA) {
     bub.appendChild(el('div', null, t.draft));
     if (t.draft_ja) bub.appendChild(el('div', 'org', t.draft_ja));
     col.appendChild(bub);
-    var bs = el('div', 'pbtn'), go = el('button', 'sd', 'Send'), own = el('button', 'f-bk', 'Typing');
-    go.id = 'pSend'; own.id = 'pOwn';
+    // 2026-10-22 ユーザー指示: 2×2 = 上 [Send][Decline] / 下 [Template][Typing]。Decline = テンプレ「お断り US以外」を確認なしで 1 回で送る / Template = 下のバーの Template と同じ
+    var bs = el('div', 'pbtn'), bs2 = el('div', 'pbtn'), go = el('button', 'sd', 'Send'), dec = el('button', 'f-bk', 'Decline'), tpl = el('button', 'f-bk', 'Template'), own = el('button', 'f-bk', 'Typing');
+    go.id = 'pSend'; dec.id = 'pDecline'; tpl.id = 'pTpl'; own.id = 'pOwn';
     go.onclick = function () { doConfirmSend(t); };
+    dec.onclick = function () { dec.disabled = true; doDecline(t); };
+    tpl.onclick = function () { doTpl(); };
     own.onclick = function () { $('ta').value = t.draft_ja || ''; showBox(false); fitTa($('ta')); $('ta').focus(); chk(); };
-    bs.appendChild(go); bs.appendChild(own); col.appendChild(bs);
+    bs.appendChild(go); bs.appendChild(dec); bs2.appendChild(tpl); bs2.appendChild(own); col.appendChild(bs); col.appendChild(bs2);
     row.appendChild(col);
     return row;
   }
@@ -386,7 +389,11 @@ function startClient(DATA) {
   function doConfirmSend(t) {
     var body = String(t.draft || '').trim();
     if (!body || busyF || sentF) return;
-    busy(true); out('送信中…', '');
+    busy(true); confirmSendBody(t, body, t.draft_ja || '');
+  }
+  // 確認待ちの案を片付ける送信の本体 (Send と Decline で共通)。呼ぶ前に busy(true) 済み。onNg = 送れなかった時 (keepLocked = 二重送信を避けて締めたままの時は true を渡す)
+  function confirmSendBody(t, body, ja, onNg) {
+    out('送信中…', '');
     sendBatches(t.mid, body, function (r) {
       if (cur !== t) return;
       if (r.ok) {
@@ -398,12 +405,30 @@ function startClient(DATA) {
           if (cur === t) out((lr && lr.ok ? '送信しました。' : '送信しました (') + (lr && lr.message ? lr.message : '台帳の結果が不明です') + (lr && lr.ok ? '' : ')'), lr && lr.ok ? 'ok' : 'ng');
         }).withFailureHandler(function (e) {
           if (cur === t) out('送信しました (台帳に記録できなかった: ' + (e && e.message ? e.message : e) + ')', 'ng');
-        }).repliesLedgerRecord(t.mid, body, t.draft_ja || '', TOKEN);
+        }).repliesLedgerRecord(t.mid, body, ja, TOKEN);
       } else {
         out(r.message, 'ng');
         if (!r.keepLocked) busy(false);
+        if (onNg) onNg(!!r.keepLocked);
       }
-    }, function (e) { out('失敗: ' + e.message, 'ng'); busy(false); });
+    }, function (e) { out('失敗: ' + e.message, 'ng'); busy(false); if (onNg) onNg(false); });
+  }
+  // [Decline]: テンプレ「お断り US以外」(値引きの節) を確認なしで 1 回で送る。英文はテンプレを選んで送る時と同じ作り方 = D 列の定型の英語があればそれ・無ければ repliesTranslate (/api/translate) で訳す。送る経路は Send と同じ confirmSendBody
+  function doDecline(t) {
+    var btn = $('pDecline');
+    if (busyF || sentF) { if (btn) btn.disabled = false; return; }
+    function back() { if (btn) btn.disabled = false; }
+    busy(true); out('お断り (US以外) の文を準備しています…', '');
+    loadTpl(function (items) {
+      var hit = items.filter(function (n) { return String(n.name).indexOf('お断り') >= 0 && String(n.name).indexOf('US以外') >= 0; })[0];
+      if (!hit) { out('テンプレ「お断り US以外」が見つかりません (シートの返信テンプレを確認)', 'ng'); busy(false); back(); return; }
+      function go(en) { if (cur !== t) { busy(false); return; } confirmSendBody(t, en, hit.body, function (locked) { if (!locked) back(); }); }
+      if (hit.en) { go(hit.en); return; }
+      GSR().withSuccessHandler(function (r) {
+        if (!r.ok || !String(r.text || '').trim()) { out(r.message || '訳せませんでした', 'ng'); busy(false); back(); return; }
+        go(String(r.text).trim());
+      }).withFailureHandler(function (e) { fail(e); back(); }).repliesTranslate(t.mid, hit.body, TOKEN);
+    }, function (e) { fail(e); back(); });
   }
 
   function openThread(i, push) {
@@ -661,16 +686,19 @@ function startClient(DATA) {
     en = ''; enLang = ''; jaSnap = ''; out('', ''); chk(); fitTa(ta);
   }
   function closePanel() { var p = $('panel'); p.hidden = true; p.textContent = ''; }
+  // 2026-10-22 ユーザー指示: 下までスクロールして Cancel を押さないと閉じられない → 窓の右上に Typing の窓と同じ黒丸の × (.tax)。スクロールしても右上に付いてくる (.pxw は sticky)
+  function panelX(p) { var w = el('div', 'pxw'), x = el('span', 'tax', '×'); x.title = '閉じる'; x.onclick = closePanel; w.appendChild(x); p.appendChild(w); }
+  function openPanel(p) { p.hidden = false; p.textContent = ''; panelX(p); }
 
   // ---- AI: 方針の選択肢 (選ぶだけ) → 指示の追加 → 依頼で日本語の返信文
   function doAi() {
     var p = $('panel'), t = cur;
     aiMemo = $('ta').value;
-    p.hidden = false; p.textContent = '';
+    openPanel(p);
     p.appendChild(el('div', 'ph', 'AI が方針を考えています…'));
     GSR().withSuccessHandler(function (r) {
       var sel = null, cards = [];
-      p.textContent = '';
+      p.textContent = ''; panelX(p);
       p.appendChild(el('div', 'ph', '方針を 1 つ選べます (もう一度押すと解除)'));
       r.options.forEach(function (o) {
         var b = el('button', 'opt');
@@ -720,7 +748,7 @@ function startClient(DATA) {
   // ---- Template
   function showTpl(items) {
     var p = $('panel');
-    p.hidden = false; p.textContent = '';
+    openPanel(p);
     p.appendChild(el('div', 'ph', 'テンプレを選ぶと日本語の窓に入ります (シート「Mail」の下の返信テンプレで足し引きできます)'));
     // 種類ごとに色を変える。色はシート (Mail の A・B 列の条件付き書式) と同じ並び = 種類が出てくる順に 8 色を繰り返す
     var TPL_COLORS = ['#FDE2E2', '#FFF2CC', '#D9EAD3', '#D0E0F5', '#F9D5B8', '#E1D5F0', '#E0E0E0', '#D5F0EE'];
@@ -740,23 +768,27 @@ function startClient(DATA) {
     });
     var x = el('button', 'opt cancel', 'Cancel'); x.onclick = closePanel; p.appendChild(x);
   }
-  function doTpl() {
-    if (tplCache) { showTpl(tplCache); return; }
-    var p = $('panel');
-    p.hidden = false; p.textContent = ''; p.appendChild(el('div', 'ph', 'テンプレを読んでいます…'));
+  function loadTpl(ok, ng) {
+    if (tplCache) { ok(tplCache); return; }
     GSR().withSuccessHandler(function (r) {
       // 種類はシートに出てくる順に並べる (行を入れ替えればページの順も変わる・2026-10-11)。同じ種類の中もシートの順
       var ord = {};
       r.items.forEach(function (it) { if (!(it.kind in ord)) ord[it.kind] = Object.keys(ord).length; });
       tplCache = r.items.slice().sort(function (a, b) { return ord[a.kind] - ord[b.kind]; });
-      showTpl(tplCache);
-    }).withFailureHandler(function (e) { closePanel(); fail(e); }).repliesTemplates(TOKEN);
+      ok(tplCache);
+    }).withFailureHandler(ng).repliesTemplates(TOKEN);
+  }
+  function doTpl() {
+    if (tplCache) { showTpl(tplCache); return; }
+    var p = $('panel');
+    openPanel(p); p.appendChild(el('div', 'ph', 'テンプレを読んでいます…'));
+    loadTpl(showTpl, function (e) { closePanel(); fail(e); });
   }
 
   // ---- Block (eBay API に買い手ブロックの操作が無いので eBay の画面へ)
   function doBlock() {
     var p = $('panel'), t = cur;
-    p.hidden = false; p.textContent = '';
+    openPanel(p);
     p.appendChild(el('div', 'ph', 'eBay の API には買い手をブロックする操作が無いため、eBay の「買い手のブロック」画面で登録します。「, ' + t.buyer + '」(頭にカンマ付き) をコピーして画面を開きます。一覧の最後に貼り付けて Submit。'));
     var go = el('button', 'opt'); go.appendChild(el('b', null, 'Copy ID & Open'));
     go.onclick = function () {
@@ -771,7 +803,7 @@ function startClient(DATA) {
   // ---- 5% Offer (API では特定の 1 人にオファーを送れないので、金額をコピーして eBay のメッセージ画面へ。会話を開いて Send offer で貼る)
   function doOffer() {
     var p = $('panel'), t = cur;
-    p.hidden = false; p.textContent = '';
+    openPanel(p);
     var m = String(t.price || '').match(/^(\D*?)\s*([\d,]+(?:\.\d+)?)$/);
     if (!m) { p.appendChild(el('div', 'ph', '出品価格が取れていないため 5% 引きを計算できません (価格: ' + (t.price || '空') + ')')); var x0 = el('button', 'opt cancel', 'Cancel'); x0.onclick = closePanel; p.appendChild(x0); return; }
     var c = offerCalc(t), off = c.off, cur$ = c.cur;
