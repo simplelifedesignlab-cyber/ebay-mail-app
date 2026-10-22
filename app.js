@@ -848,7 +848,12 @@ function startClient(DATA) {
     enLang = 'en'; jaSnap = $('ta').value; showEn(); chk();
     offerOpen(t, Number(amt).toFixed(2));
   }
-  var itemHooks = { offer: itemOffer };
+  // 商品画面の Template / Decline: 画面を閉じて会話に戻り、会話画面の同じボタンと同じ動きをする (Decline は確認なしでお断り US以外を送る)
+  var itemHooks = {
+    offer: itemOffer,
+    template: function (t) { if (cur === t) doTpl(); },
+    decline: function (t) { if (cur === t) doDecline(t); }
+  };
   // 最終画面の 5% Offer: パネルを出さずに金額コピー+会話を開く (SendMail の後にそのまま押す想定)
   function finOffer() {
     var c = offerCalc(cur);
@@ -1654,9 +1659,10 @@ var ItemsUi = (function () {
         var u = safeUrl(r.pics && r.pics[String(it.item_id)]); if (u) topIm.src = u;
       }).catch(function () { });   // サムネが取れなくても画面は使えるので、ここは黙って進める
     }
+    var supIm = null;
     if (th0) {
       var same = th0.item_id && String(th0.item_id) === String(it.item_id);
-      var supIm = pcard('Supplier', th0.pic, th0.title, 'ItemID ' + (th0.item_id || '-') + (th0.price ? ' ・' + th0.price : ''),
+      supIm = pcard('Supplier', th0.pic, th0.title, 'ItemID ' + (th0.item_id || '-') + (th0.price ? ' ・' + th0.price : ''),
         same ? 'ItemID が同じです' : 'ItemID は別です (他国の出品なら正常)。写真と商品名で同じ商品か確かめてください', !same, safeUrl(it.src_url));
       if (!safeUrl(it.src_url) && it.item_id) {   // 売れた商品は利益計算表の I が空 → 販売シートの I の仕入先へ飛ばす (2026-10-14)
         apiCall('GET', '/api/item-supplier?id=' + encodeURIComponent(it.item_id)).then(function (r) {
@@ -1693,22 +1699,15 @@ var ItemsUi = (function () {
       refresh: function () { ed.btns.forEach(function (b) { b.disabled = ed.ended || ed.busy || (b.canPress ? !b.canPress() : false); }); },
       setBusy: function (v) { ed.busy = v; ed.refresh(); }
     };
-    var cb = calcBox(it, guess, ed);
+    var cb = calcBox(it, guess, ed, from && from.t, from && from.hooks, function (r) {   // 売価は 1 つだけ: カードの数字も eBay の今の売価に合わせる
+      var tp = topIm.parentNode && topIm.parentNode.querySelector('.psb');
+      if (tp) tp.textContent = 'ItemID ' + (it.item_id || '-') + ' ・' + usd(r.us_price) + ' ・' + it.row + ' 行目';
+      var sp = supIm && supIm.parentNode && supIm.parentNode.querySelector('.psb');
+      if (sp && th0) sp.textContent = 'ItemID ' + (th0.item_id || '-') + ' ・' + (r.currency === 'USD' ? usd(r.list_price) : r.currency + ' ' + r.list_price.toFixed(2));
+    });
     scr.appendChild(cb.box);
     if (it.item_id) scr.appendChild(titleBox(it, ed));
-    var src = safeUrl(it.src_url), th = from && from.t;
-    // 5% Offer (eBay へ反映の右・2026-10-14): 上の BUYER 希望価格をコピーして eBay の会話へ戻りオファーの文を用意する。会話から開いた時だけ押せる
-    var of = el('button', 'irp irg', '5% Offer');
-    if (th && from.hooks && from.hooks.offer) {
-      of.onclick = function () {
-        var p = cb.offerPrice();
-        if (!p) { cb.say('BUYER 希望価格 (または差額%) を入れてください'); return; }
-        var t0 = th, h = from.hooks;
-        closeDetail();
-        h.offer(t0, p.amt, p.cur);
-      };
-    } else of.disabled = true;
-    cb.rpw.appendChild(of);
+    var src = safeUrl(it.src_url);
     // シートの値と「最低の値段」は畳んでおく (開けば今までどおり見られる)
     var more = el('details', 'imore');
     more.appendChild(el('summary', null, '最低の値段・シートの値'));
@@ -1805,36 +1804,61 @@ var ItemsUi = (function () {
     return box;
   }
 
-  // ---- 商品のカード (販売処理のメールと同じ「左に項目・右に値」の並び)。計算はサーバー (items.py・利益計算表の式の写し)
-  // 差額% = 1 − BUYER 希望価格 ÷ 問い合わせ国の売価。その % を US の今の売価 V に当てて利益を出す。
-  // 問い合わせ国の売価が空なら US の売価と同じとして扱う (= US のオファーは希望価格を USD で打つだけ)。差額% は直接打ってもよい。
-  function calcBox(it, g, ed) {
-    var box = el('div', 'calc'), extra = el('div', 'cex'), dirty = false;
+  // ---- 商品のカード (2026-10-22 作り直し: 結論の 1 行 → ボタン 3 つ → 小さい字の詳細 → 折りたたみの根拠)。
+  // 計算は全部サーバー: 判定・利益・損益分岐は /api/decline-calc (reply_decline.panel_calc = 自動お断りと同じ計算・売価は eBay の今の売価)。
+  // 差額% = 1 − BUYER 希望価格 ÷ 出品の売価 (同じ通貨)。ミラーは US 親の売価 x (希望 ÷ ミラーの売価) で親の行を計算する。/api/item-calc は「利益率 ○% の最低の値段」(別の折りたたみ) だけに使う。
+  function calcBox(it, g, ed, th, hooks, onUs) {
+    var box = el('div', 'calc'), extra = el('div', 'cex'), dirty = false, last = null;
     // 仕入れ値・送料の欄: 押したら空にして、すぐ打てるようにする。何も打たずに離れたら元の値に戻す (2026-10-18 ユーザー指示)
     function blankOnFocus(i) {
       i.addEventListener('focus', function () { i.dataset.was = i.value; i.value = ''; });
       i.addEventListener('blur', function () { if (i.value.trim() === '' && i.dataset.was) { i.value = i.dataset.was; i.dispatchEvent(new Event('input')); } });
     }
     function inp(ph, cls) { var i = el('input', cls); i.type = 'text'; i.inputMode = 'decimal'; i.placeholder = ph || ''; i.autocomplete = 'off'; return i; }
-    function row(label, node, big) {
-      var r = el('div', 'srow');
-      r.appendChild(el('span', 'sk', label));
-      node.classList.add('sv'); if (big) node.classList.add('big');
-      r.appendChild(node); box.appendChild(r);
-      return node;
+    function num(x) { var v = parseFloat(String(x).replace(/,/g, '').replace('%', '')); return isNaN(v) ? null : v; }
+    function dpct(d) { return d == null ? '-' : (d * 100).toFixed(1) + '%'; }
+    function cm(cur, n) { return n == null ? '-' : (cur === 'USD' ? usd(n) : cur + ' ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }
+    function oneLine(cls) { var d = el('div', cls || 'inote'); d.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis'; return d; }
+    // 売価は eBay の今の売価 (Sale 後) の 1 つだけを出す。出品の通貨は decline-calc の返事で入る (lpI は差額%の計算用に値だけ持つ・画面には出さない)
+    var lpI = inp(it.price == null ? '' : String(it.price)), ofI = inp('希望額'), dcI = inp('');
+    // 1. 結論の 1 行: 売価 / BUYER 希望 (入力欄) / 利益 (%)
+    var vPriceL = el('div', 'cl', 'Price'), vPrice = el('div', 'cbig', '-'), vProfit = el('div', 'cbig', '-'), vPct = el('div', 'cl', ''), vTag = el('div', 'inote ng', ''), vCur = el('div', 'cl', 'Offer');
+    var conc = el('div', 'srow');
+    conc.style.alignItems = 'flex-start';
+    function cell(flex) { var c = el('div'); c.style.cssText = 'flex:' + flex + ';min-width:0;text-align:center'; return c; }
+    var c1 = cell('1'), c2 = cell('1'), c3 = cell('1.2');
+    c1.appendChild(vPriceL); c1.appendChild(vPrice);
+    var ocrow = el('div', 'crow'); ocrow.appendChild(ofI); ofI.style.textAlign = 'center';
+    c2.appendChild(vCur); c2.appendChild(ocrow);
+    c3.appendChild(el('div', 'cl', 'Profit')); c3.appendChild(vProfit); c3.appendChild(vPct); c3.appendChild(vTag);
+    conc.appendChild(c1); conc.appendChild(c2); conc.appendChild(c3);
+    box.appendChild(conc);
+    var dcrow = el('div', 'crow'); dcrow.appendChild(el('span', 'cl', 'Off')); dcrow.appendChild(dcI); dcI.className = 'rin'; dcrow.appendChild(el('span', 'cl', '%'));
+    box.appendChild(dcrow);
+    var dmsg = el('div', 'inote'); box.appendChild(dmsg);
+    // 2. ボタン 3 つ (会話から開いた時だけ押せる)。動きは会話画面の同じボタンと同じ (Decline は確認なしで「お断り US以外」を送る)
+    var rpw = el('div', 'rpw'), bTp = el('button', 'irp irg', 'Template'), bOf = el('button', 'irp irg', '5% Offer'), bDc = el('button', 'irp irg', 'Decline');
+    [bTp, bOf, bDc].forEach(function (b) { b.type = 'button'; rpw.appendChild(b); if (!(th && hooks)) b.disabled = true; });
+    if (th && hooks) {
+      bTp.onclick = function () { closeDetail(); hooks.template(th); };
+      bDc.onclick = function () { closeDetail(); hooks.decline(th); };
+      bOf.onclick = function () {
+        if (!last || !(last.five_local > 0)) { dmsg.className = 'inote ng'; dmsg.textContent = '5% 引きの額を計算できていません'; return; }
+        closeDetail(); hooks.offer(th, Math.round(last.five_local * 100) / 100, last.currency);
+      };
     }
-    function wrap(pre, i, post) { var w = el('span'); if (pre) w.appendChild(pre); w.appendChild(i); if (post) w.appendChild(el('span', 'cur', post)); return w; }
-    var m = /^\s*(-?¥[\d,]+)\s*\(([^)]+)\)/.exec(it.profit || '');   // Z 列は「¥32,823 (15%)」の文字列
-    row('US 売価', el('span', null, usd(it.price)), true);
-    var usP = row('US 利益', el('span', null, m ? m[1] : (it.profit || '-')));
-    var usR = row('US 利益%', el('span', null, m ? m[2] : '-'));
-    box.appendChild(el('div', 'sline'));
-    // 仕入れ値 (J)・送料 (K): 打ち直すとその値で自動で計算し直す。左の更新ボタンを押すと、確認のうえシートの J / K を書き換える (2026-10-14)
+    box.appendChild(rpw);
+    // 3a/3b. 小さい字: US の売価 / 利益 / 利益% と、ミラーがある国の行
+    var usLine = oneLine(), shLine = el('div', 'inote'), ctBox = el('div');
+    usLine.textContent = 'US -';
+    box.appendChild(usLine); box.appendChild(shLine); box.appendChild(ctBox);
+    // 3c. 仕入れ値 [更新] / 送料 [更新] の 1 行。更新アイコンを押すと、確認のうえシートの J / K を書き換える (2026-10-14)
     //   sheetCost / sheetShip = 読んだ時のシートの値 (計算に送る基準) / writ = 今シートにあると画面が思っている値 (書き換えの old)。送料 K の空欄は 0
     var sheetCost = it.cost, sheetShip = it.cod == null ? 0 : it.cod, writ = { cost: it.cost, ship: sheetShip }, costI = inp(''), shipI = inp('');
     costI.value = it.cost == null ? '' : String(it.cost);
     shipI.value = it.cod == null ? '' : String(it.cod);
     blankOnFocus(costI); blankOnFocus(shipI);
+    var pushUsd = null, notes = el('div'), wr = el('div', 'inote'), msg = el('div', 'inote');   // pushUsd = 「eBay へ反映」で W に書く US の額 (希望額がある時の判定額)
     function updBtn(kind, inputEl, name) {
       var b = el('button', 'iupd');
       b.type = 'button'; b.title = name + 'をシートに書き込む'; b.setAttribute('aria-label', name + 'をシートに書き込む');
@@ -1860,65 +1884,32 @@ var ItemsUi = (function () {
       };
       return b;
     }
-    function updRow(label, b, inputEl) {
-      var w = el('span'); w.appendChild(b); w.appendChild(el('span', 'cur', '¥')); w.appendChild(inputEl);
-      row(label, w);
-    }
     var costB = updBtn('cost', costI, '仕入価格'), shipB = updBtn('ship', shipI, '送料');
-    updRow('仕入れ値', costB, costI);
-    updRow('送料', shipB, shipI);
-    // 仕入先の今の値段 (在庫監視が AN 列に書いた値)。シートの仕入価格と違う時だけ出す。押すと仕入れ値の欄に入る (シートは仕入れ値の更新ボタンを押すまで変えない)
+    var cs = el('div', 'crow');
+    cs.appendChild(el('span', 'cl', 'Cost')); cs.appendChild(costB); cs.appendChild(el('span', 'cl', '¥')); cs.appendChild(costI);
+    cs.appendChild(el('span', 'cl', 'Shipping')); cs.appendChild(shipB); cs.appendChild(el('span', 'cl', '¥')); cs.appendChild(shipI);
+    [costI, shipI].forEach(function (i) { i.style.minWidth = '0'; i.style.width = '0'; i.style.padding = '0 6px'; });
+    [costB, shipB].forEach(function (b) { b.style.width = b.style.height = '30px'; });
+    cs.style.gap = '4px';
+    box.appendChild(cs);
+    // 仕入先の今の値段 (在庫監視が AN 列に書いた値)。シートの仕入価格と違う時だけ出す。押すと仕入れ値の欄に入る (シートは仕入れ値の更新アイコンを押すまで変えない)
     if (it.src_price != null && it.src_price > 0 && it.src_price !== it.cost) {
-      var sc = el('button', 'schip', '仕入先の今の値段 ' + yen(it.src_price) + ' を入れる');
+      var sc = el('button', 'schip', 'Use ' + yen(it.src_price));
       sc.onclick = function () { costI.value = String(it.src_price); costI.dispatchEvent(new Event('input')); };
       box.appendChild(sc);
     }
-    var curL = el('span', 'cur', ''), lpI = inp(it.price == null ? '' : String(it.price)), ofI = inp('手入力できます'), dcI = inp('');
-    row('問い合わせ国の売価', wrap(curL, lpI));
-    row('BUYER 希望価格', wrap(null, ofI));
-    row('差額%', wrap(null, dcI, '%'));
-    box.appendChild(el('div', 'sline'));
-    var out = row('BUYER 希望での利益', el('span', null, '-'), true);
-    // ---- お断り判定 (2026-10-22 ユーザー指示): 自動お断りと同じ計算をサーバー (reply_decline.panel_calc・/api/decline-calc) で手でも使う。式は JS に写さない。
-    //   入力 = 上の BUYER 希望価格 (問い合わせ国の通貨)。空なら 5% 引き。会話を開いて欄が空なら、本文から拾った希望額を初めから入れる
-    box.appendChild(el('div', 'sline'));
-    var dj = row('お断り判定', el('span', null, '-'), true), dl = row('出品の売価', el('span', null, '-')), dr = row('希望額', el('span', null, '-'));
-    var dpar = row('US 親の売価', el('span', null, '-')), dus = row('US 換算の額', el('span', null, '-')), dfx = row('1 USD =', el('span', null, '-'));
-    var dpf = row('その額での利益', el('span', null, '-')), dbe = row('損益分岐 (利益 0 円)', el('span', null, '-')), d5 = row('5% 引き', el('span', null, '-'));
-    var dmsg = el('div', 'inote'); box.appendChild(dmsg);
-    var dAuto = true, dSeq = 0;
-    function cm(cur, n) { return n == null ? '-' : (cur === 'USD' ? usd(n) : cur + ' ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }
-    function dshow(node, on) { node.parentNode.style.display = on ? '' : 'none'; }
-    function declineCalc() {
-      var my = ++dSeq, rq = ofI.value.trim().replace(/,/g, ''), auto = dAuto && rq === '';
-      dAuto = false;
-      apiCall('POST', '/api/decline-calc', { mid: (from && from.t && from.t.mid) || '', item_id: String(it.item_id || ''), requested: rq, auto: auto }).then(function (r) {
-        if (my !== dSeq) return;
-        if (!r.ok) { [dl, dr, dpar, dus, dfx, dpf, dbe, d5].forEach(function (n) { n.textContent = '-'; }); dj.textContent = '-'; dj.classList.remove('neg'); dmsg.className = 'inote ng'; dmsg.textContent = '判定できません: ' + r.message; return; }
-        if (auto && r.suggested != null && ofI.value.trim() === '') { ofI.value = String(r.suggested); ofI.oninput(); return; }   // 本文から拾った希望額を入れて計算し直す
-        var dec = r.action === 'decline';
-        dj.textContent = dec ? '自動お断りのライン (利益 0 円以下)' : '黒字 (5% 案)'; dj.classList.toggle('neg', dec);
-        dl.textContent = cm(r.currency, r.list_price);
-        dr.textContent = r.requested ? cm(r.currency, r.requested) + ' (売価の ' + pc(r.pct_off) + ' 引き)' : '希望額なし (5% 引きで判定)';
-        dshow(dpar, r.mirror); dshow(dfx, r.mirror);
-        if (r.mirror) { dpar.textContent = usd(r.parent_price) + ' (親 ' + r.parent_id + ')'; dfx.textContent = r.per_usd.toFixed(4) + ' ' + r.currency; }
-        dus.textContent = usd(r.usd_used) + (r.mirror ? ' (親の売価 x 比率)' : '');
-        dpf.textContent = yen(r.profit_yen) + ' (' + pc(r.rate) + ')'; dpf.classList.toggle('neg', r.profit_yen < 0);
-        dbe.textContent = r.breakeven_usd == null ? '届きません' : cm(r.currency, r.breakeven_local) + (r.mirror ? ' / ' + usd(r.breakeven_usd) : '') + ' (売価の ' + pc(r.breakeven_pct_off) + ' 引き)';
-        d5.textContent = cm(r.currency, r.five_local) + (r.mirror ? ' / US 換算 ' + usd(r.parent_price * 0.95) : '');
-        dmsg.className = 'inote'; dmsg.textContent = r.fx || ('利益計算表 ' + r.row + ' 行目で ' + r.basis + ' の額 ' + usd(r.usd_used) + ' の利益を計算');
-      }).catch(function (e) { if (my === dSeq) { dmsg.className = 'inote ng'; dmsg.textContent = 'お断り判定を取れませんでした: ' + msgOf(e); } });
-    }
-    var pushBtn = el('button', 'irp', 'eBay へ反映');   // BUYER 希望価格 (US 額) を W (販売価格・手動) に書き、G に ItemID を貼り直したのと同じ処理で eBay へ送る (GAS の reset)
-    var rpw = el('div', 'rpw');
-    rpw.appendChild(pushBtn);
-    box.appendChild(rpw);
-    var pushUsd = null;   // 最後の計算が出した、BUYER 希望価格に当たる US の額 (r.price_usd)。計算できない・希望価格が空なら null
+    // 3d. 折りたたみ「根拠」: 損益分岐・5% 引きの額・計算の根拠・AI が拾った原文・eBay へ反映
+    var det = el('details', 'imore'), vBe = el('div', 'inote'), v5 = el('div', 'inote'), vWhy = el('div', 'inote');
+    det.appendChild(el('summary', null, 'Details'));
+    det.appendChild(vBe); det.appendChild(v5); det.appendChild(vWhy); det.appendChild(notes);
+    var pushBtn = el('button', 'irp', 'eBay へ反映');   // 希望額 (US 額) を W (販売価格・手動) に書き、G に ItemID を貼り直したのと同じ処理で eBay へ送る (GAS の reset)
+    pushBtn.type = 'button';
     pushBtn.canPress = function () { return !!it.calc_ok && /^\d{12}$/.test(String(it.item_id || '')) && pushUsd !== null && pushUsd > 0; };
     ed.btns.push(pushBtn);
-    var notes = el('div'), wr = el('div', 'inote'), msg = el('div', 'inote');
-    box.appendChild(notes); box.appendChild(wr); box.appendChild(msg);
-    // 畳んである側: 利益率 ○% を残せる最低の値段・利益ゼロの値段
+    var pw = el('div', 'rpw'); pw.appendChild(pushBtn);
+    det.appendChild(pw); det.appendChild(wr); det.appendChild(msg);
+    box.appendChild(det);
+    // 利益率 ○% を残せる最低の値段・利益ゼロの値段 (従来どおり別の折りたたみ「最低の値段・シートの値」に入る)
     var mr = el('div', 'crow'), rin = inp('', 'rin');
     rin.value = it.target ? String(Math.round(it.target * 1000) / 10) : '';
     mr.appendChild(el('span', 'cl', '利益率')); mr.appendChild(rin); mr.appendChild(el('span', 'cl', '% を残せる最低の値段'));
@@ -1927,101 +1918,110 @@ var ItemsUi = (function () {
     extra.appendChild(minv);
     extra.appendChild(el('div', 'cl2', '利益ゼロの値段'));
     extra.appendChild(zerov);
-    if (!it.calc_ok) { msg.className = 'inote ng'; msg.textContent = '計算できません: ' + it.calc_error; [costI, shipI, costB, shipB, lpI, ofI, dcI, rin, pushBtn].forEach(function (x) { x.disabled = true; }); return { box: box, extra: extra, rpw: rpw, offerPrice: function () { return null; }, say: function () { } }; }
+    var ret = { box: box, extra: extra, rpw: rpw, say: function (t) { dmsg.className = 'inote ng'; dmsg.textContent = t; } };
+    if (!it.calc_ok) { dmsg.className = 'inote ng'; dmsg.textContent = '計算できません: ' + it.calc_error; [costI, shipI, costB, shipB, ofI, dcI, rin, pushBtn, bOf, bDc].forEach(function (x) { x.disabled = true; }); return ret; }
 
-    function num(x) { var v = parseFloat(String(x).replace(/,/g, '').replace('%', '')); return isNaN(v) ? null : v; }
-    function dpct(d) { return d == null ? '-' : (d * 100).toFixed(1) + '%'; }
-    function ptText(p) {   // US の額 + V からの割引率 (+ 問い合わせ国の売価が入っていれば現地の額)
+    var seqC = 0, dSeq = 0, dAuto = true, t2 = null;
+    function costBody(body) {   // 打ち直した仕入れ値・送料 (読んだ時のシートの値と違う時だけ送る)。不正なら理由を返す
+      var cv = num(costI.value);
+      if (costI.value.trim() !== '' && (cv === null || cv <= 0)) return '仕入れ値は 0 より大きい数字で入れてください';
+      if (cv !== null && cv !== sheetCost) body.cost = cv;
+      var sv = num(shipI.value);
+      if (shipI.value.trim() !== '' && (sv === null || sv < 0)) return '送料は 0 以上の数字で入れてください';
+      if (sv !== null && sv !== sheetShip) body.ship = sv;
+      return '';
+    }
+    function dfail(t) { pushUsd = null; ed.refresh(); vProfit.textContent = '-'; vProfit.classList.remove('neg'); vPct.textContent = ''; vTag.textContent = ''; dmsg.className = 'inote ng'; dmsg.textContent = t; }
+    function declineCalc() {
+      var my = ++dSeq, rq = ofI.value.trim().replace(/,/g, ''), auto = dAuto && rq === '';
+      dAuto = false;
+      var body = { mid: (th && th.mid) || '', item_id: String((th && th.item_id) || it.item_id || ''), requested: rq, auto: auto };
+      var bad = costBody(body);
+      if (bad) { dfail(bad); return; }
+      apiCall('POST', '/api/decline-calc', body).then(function (r) {
+        if (my !== dSeq) return;
+        if (!r.ok) { last = null; dfail('判定できません: ' + r.message); return; }
+        if (auto && r.suggested != null && ofI.value.trim() === '') { ofI.value = String(r.suggested); ofI.oninput(); return; }   // 本文から拾った希望額を入れて計算し直す
+        last = r;
+        lpI.value = String(r.list_price);                                                      // 売価は eBay の今の売価 1 つだけ (Sale 後)
+        if (!dirty && r.requested) dcI.value = String(Math.round(r.pct_off * 1000) / 10);
+        pushUsd = r.requested ? r.usd_used : null; ed.refresh();
+        vPrice.textContent = r.currency === 'USD' ? usd(r.list_price) : r.list_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        vPriceL.textContent = 'Price' + (r.currency === 'USD' ? '' : ' (' + r.currency + ')');
+        vCur.textContent = 'Offer' + (r.currency === 'USD' ? '' : ' (' + r.currency + ')');
+        vProfit.textContent = yen(r.profit_yen); vProfit.classList.toggle('neg', r.profit_yen < 0);
+        vPct.textContent = '(' + pc(r.rate) + ')' + (r.requested ? '' : ' 5% off');
+        vTag.textContent = r.action === 'decline' ? 'Decline' : '';
+        dmsg.className = 'inote'; dmsg.textContent = '';
+        usLine.textContent = 'US ' + usd(r.us_price) + ' / ' + yen(r.us_profit) + ' / ' + pc(r.us_rate, 0);
+        shLine.textContent = r.sheet_older ? 'Sheet ' + usd(r.sheet_price) + ' is stale (eBay ' + usd(r.us_price) + ')' : '';
+        ctBox.textContent = '';
+        (r.countries || []).forEach(function (c) {
+          var d = oneLine(); d.textContent = c.code + ' ' + cm(c.currency, c.price) + ' → ' + cm(c.currency, c.judged_local) + ' / ' + yen(c.profit_yen) + ' / ' + pc(c.rate, 0); ctBox.appendChild(d);
+        });
+        vBe.textContent = 'Breakeven: ' + (r.breakeven_usd == null ? 'n/a' : cm(r.currency, r.breakeven_local) + (r.mirror ? ' / ' + usd(r.breakeven_usd) : '') + ' (' + pc(r.breakeven_pct_off) + ' off)');
+        v5.textContent = '5% off: ' + cm(r.currency, r.five_local) + (r.mirror ? ' / US ' + usd(r.parent_price * 0.95) : '');
+        vWhy.textContent = '根拠: ' + (r.fx || ('利益計算表 ' + r.row + ' 行目で ' + r.basis + ' の額 ' + usd(r.usd_used) + ' の利益を計算'));
+        if (onUs) onUs(r);
+      }).catch(function (e) { if (my === dSeq) dfail('お断り判定を取れませんでした: ' + msgOf(e)); });
+    }
+    function ptText(p) {   // US の額 + V からの割引率 (+ 出品の通貨の額)
       if (p.usd == null) return null;
       return usd(p.usd) + ' (割引率 ' + dpct(p.discount) + ')' + (p.local != null && lpI.value.trim() !== '' ? '  /  現地 ' + (Math.round(p.local * 100) / 100).toLocaleString('ja-JP') : '');
     }
-    function fail(t) { pushUsd = null; ed.refresh(); out.textContent = '-'; out.classList.remove('neg'); msg.className = 'inote ng'; msg.textContent = t; }
-    function recalc() {
-      var my = ++seqC, rtxt = rin.value.trim(), rv = rtxt === '' ? null : num(rtxt) / 100;
+    function recalc() {   // 判定は declineCalc (サーバーの 1 本の計算)。ここは「利益率 ○% を残せる最低の値段」(別の折りたたみ) だけ
       declineCalc();
-      if (rtxt !== '' && rv === null) { fail('利益率は数字で入れてください'); return Promise.resolve(); }
+      var my = ++seqC, rtxt = rin.value.trim(), rv = rtxt === '' ? null : num(rtxt) / 100;
+      if (rtxt !== '' && rv === null) { msg.className = 'inote ng'; msg.textContent = '利益率は数字で入れてください'; return Promise.resolve(); }
       var lp = lpI.value.trim().replace(/,/g, '');
       var body = { row: it.row, mode: 'other', rate: rv, list_price: lp === '' ? it.price : lp, offer: ofI.value.trim().replace(/,/g, '') };
-      var cv = num(costI.value);
-      if (costI.value.trim() !== '' && (cv === null || cv <= 0)) { fail('仕入れ値は 0 より大きい数字で入れてください'); return Promise.resolve(); }
-      if (cv !== null && cv !== sheetCost) body.cost = cv;   // 読んだ時のシートの値と違う時だけ送る
-      var sv = num(shipI.value);
-      if (shipI.value.trim() !== '' && (sv === null || sv < 0)) { fail('送料は 0 以上の数字で入れてください'); return Promise.resolve(); }
-      if (sv !== null && sv !== sheetShip) body.ship = sv;
-      if (dirty && dcI.value.trim() !== '') { var dv = num(dcI.value); if (dv === null) { fail('差額% は数字で入れてください'); return Promise.resolve(); } body.discount = dv / 100; }
+      if (costBody(body)) return Promise.resolve();
+      if (dirty && dcI.value.trim() !== '') { var dv = num(dcI.value); if (dv === null) { msg.className = 'inote ng'; msg.textContent = '差額% は数字で入れてください'; return Promise.resolve(); } body.discount = dv / 100; }
       return apiCall('POST', '/api/item-calc', body).then(function (r) {
         if (my !== seqC) return;
         minv.textContent = ''; zerov.textContent = '';
-        pushUsd = (r.ok && r.calc && r.price_usd > 0) ? r.price_usd : null;
-        ed.refresh();
-        if (!r.ok) { fail(r.message); return; }
-        msg.className = 'inote';
-        if (r.us) { usP.textContent = yen(r.us.profit); usR.textContent = pc(r.us.rate, 0); }   // 打ち直した仕入れ値での US の利益
-        else { usP.textContent = m ? m[1] : (it.profit || '-'); usR.textContent = m ? m[2] : '-'; }
-        if (r.calc) {
-          var c = r.calc;
-          out.textContent = yen(c.profit) + ' (' + pc(c.rate) + ')';
-          out.classList.toggle('neg', c.profit < 0);
-          msg.textContent = 'US の売価 ' + usd(it.price) + ' に差額 ' + dpct(r.discount) + ' を当てた額 ' + usd(r.price_usd) + ' で計算' + (c.below_duty_floor ? ' / この額は関税・通関の最低額より小さいため、売上は 0 として計算しています' : '');
-          if (c.below_duty_floor) msg.className = 'inote ng';
-        } else { out.textContent = '-'; out.classList.remove('neg'); msg.textContent = ''; }
+        msg.className = 'inote'; msg.textContent = '';
+        if (!r.ok) { msg.className = 'inote ng'; msg.textContent = r.message; return; }
         if (r.min_price) minv.textContent = ptText(r.min_price) || 'この利益率には届きません';
         else minv.textContent = rtxt === '' ? '(利益率を入れてください)' : '';
         zerov.textContent = ptText(r.zero_price) || '-';
-      }).catch(function (e) { if (my === seqC) fail('失敗: ' + msgOf(e)); });
+      }).catch(function (e) { if (my === seqC) { msg.className = 'inote ng'; msg.textContent = '失敗: ' + msgOf(e); } });
     }
-    var t2 = null;
     function later() { clearTimeout(t2); t2 = setTimeout(recalc, 250); }
     rin.oninput = later;
     costI.oninput = function () { later(); ed.refresh(); };
     shipI.oninput = function () { later(); ed.refresh(); };
-    [lpI, ofI].forEach(function (x) {   // 売価か希望価格を打つと差額% に計算結果を出す (差額% を直接打ち直せば、そちらが優先)
-      x.oninput = function () {
-        dirty = false;
-        var l = lpI.value.trim() === '' ? it.price : num(lpI.value), o = num(ofI.value);
-        dcI.value = (l && o && l > 0) ? String(Math.round((1 - o / l) * 1000) / 10) : '';
-        later();
-      };
-    });
-    dcI.oninput = function () {   // 差額% を直接打ったら、その % を当てた額を BUYER 希望価格の欄にも出す (Offer でコピーする額)
+    ofI.oninput = function () {   // 希望額を打つと差額% に計算結果を出す (差額% を直接打ち直せば、そちらが優先)
+      dirty = false;
+      var l = lpI.value.trim() === '' ? it.price : num(lpI.value), o = num(ofI.value);
+      dcI.value = (l && o && l > 0) ? String(Math.round((1 - o / l) * 1000) / 10) : '';
+      later();
+    };
+    dcI.oninput = function () {   // 差額% を直接打ったら、その % を当てた額を希望額の欄にも出す
       dirty = true;
       var l = lpI.value.trim() === '' ? it.price : num(lpI.value), dv = num(dcI.value);
       if (l && dv !== null && dv < 100) ofI.value = (l * (1 - dv / 100)).toFixed(2);
       later();
     };
-    pushBtn.onclick = function () {   // BUYER 希望価格の US 額を W (販売価格・手動) に書いて eBay へ送る。W は Sale の対象外 (仕入れ値は左の更新ボタンで書く)
+    pushBtn.onclick = function () {   // 希望額の US 額を W (販売価格・手動) に書いて eBay へ送る。W は Sale の対象外 (仕入れ値は更新アイコンで書く)
       clearTimeout(t2);
-      if (ofI.value.trim() === '') { wr.className = 'inote ng'; wr.textContent = 'BUYER 希望価格 (または差額%) を入れてください'; return; }
-      recalc().then(function () {   // 打ちかけの値で最後に計算し直した US 額を使う (自前で換算しない)
-        if (pushUsd === null) { wr.className = 'inote ng'; wr.textContent = 'BUYER 希望価格の US の額を計算できません (上の赤い文を確認してください)'; return; }
-        var usdAmt = Math.round(pushUsd * 100) / 100;
-        if (!window.confirm('W に $' + usdAmt.toFixed(2) + ' を書いて eBay へ送ります。よろしいですか?')) return;
-        editCall(ed, '/api/item-price-push', { item_id: String(it.item_id), price: usdAmt }, wr, function () { recalc(); });
-      });
+      if (ofI.value.trim() === '') { wr.className = 'inote ng'; wr.textContent = '希望額 (または差額%) を入れてください'; return; }
+      if (pushUsd === null || !(pushUsd > 0)) { wr.className = 'inote ng'; wr.textContent = '希望額の US の額を計算できません (上の赤い文を確認してください)'; return; }
+      var usdAmt = Math.round(pushUsd * 100) / 100;
+      if (!window.confirm('W に $' + usdAmt.toFixed(2) + ' を書いて eBay へ送ります。よろしいですか?')) return;
+      editCall(ed, '/api/item-price-push', { item_id: String(it.item_id), price: usdAmt }, wr, function () { recalc(); });
     };
     ed.refresh();
     if (g) fillGuess();
     recalc();
-    return {
-      box: box, extra: extra, rpw: rpw,
-      say: function (t) { msg.className = 'inote ng'; msg.textContent = t; },
-      // Offer でコピーする額 (BUYER 希望価格の欄) と通貨。問い合わせ国の売価が空なら US の額 (USD)
-      offerPrice: function () {
-        var o = num(ofI.value);
-        return o && o > 0 ? { amt: o, cur: curL.textContent || (lpI.value.trim() === '' ? 'USD' : '') } : null;
-      }
-    };
+    return ret;
 
-    // 会話から開いた時: 「問い合わせ国の売価・BUYER 希望価格」を自動で入れる (手で直せる・直すと再計算)。拾えなかった項目は空のまま理由を出す
+    // 会話から開いた時: 希望額を自動で入れる (手で直せる・直すと再計算)。売価は eBay の今の売価 (declineCalc が入れる)。拾えなかった理由は根拠の中に出す
     function fillGuess() {
-      var gl = g.list_price, go = g.offer, ns = [];
-      if (gl) { lpI.value = String(gl.amount); curL.textContent = gl.currency; }
-      else if (g.list_error) ns.push('その国の売価を取れませんでした: ' + g.list_error);
+      var go = g.offer, ns = [];
       if (go && go.found) {
-        if (gl && go.currency === gl.currency) {
-          ofI.value = String(go.amount);
-          if (g.discount != null) dcI.value = String(Math.round(g.discount * 1000) / 10);
-        } else ns.push(g.note || ('通貨が違うので計算できません (希望価格 ' + go.currency + ' ' + go.amount + ')'));
+        if (!g.list_price || go.currency === g.list_price.currency) ofI.value = String(go.amount);
+        else ns.push(g.note || ('通貨が違うので計算できません (希望価格 ' + go.currency + ' ' + go.amount + ')'));
         if (go.quote) notes.appendChild(el('div', 'iquote', 'AI が拾った原文: ' + go.quote + ' → ' + go.currency + ' ' + go.amount));
       } else if (go) ns.push(go.reason || '希望価格を拾えませんでした (手で入れられます)');
       if (g.note && !(go && go.found)) ns.push(g.note);
