@@ -46,6 +46,12 @@ var GSR_ROUTES = {
   repliesLedgerRecord: function (a) { return ['POST', '/api/ledger', { mid: a[0], body: a[1], ja: a[2] }]; },
   repliesOfferUrl: function (a) { return ['POST', '/api/offer-url', { mid: a[0], itemId: a[1], buyer: a[2] }]; }
 };
+// DECLINE-TPL-BEGIN (お断りの定型「お断り US以外」/「Decline (Non-US)」を名前で探す。古い名前でも新しい名前でも当たる。test_decline_tpl.js が取り出して流す)
+function isDeclineTpl(n) {
+  var s = String((n && n.name) || '').toLowerCase();
+  return (s.indexOf('お断り') >= 0 && s.indexOf('us以外') >= 0) || (s.indexOf('decline') >= 0 && s.indexOf('non-us') >= 0);
+}
+// DECLINE-TPL-END
 function GSR() {
   var ok = function () { }, ng = null;
   var h = new Proxy({}, {
@@ -420,8 +426,8 @@ function startClient(DATA) {
     function back() { if (btn) btn.disabled = false; }
     busy(true); out('お断り (US以外) の文を準備しています…', '');
     loadTpl(function (items) {
-      var hit = items.filter(function (n) { return String(n.name).indexOf('お断り') >= 0 && String(n.name).indexOf('US以外') >= 0; })[0];
-      if (!hit) { out('テンプレ「お断り US以外」が見つかりません (シートの返信テンプレを確認)', 'ng'); busy(false); back(); return; }
+      var hit = items.filter(isDeclineTpl)[0];
+      if (!hit) { out('テンプレ「Decline (Non-US)」が見つかりません (シートの返信テンプレを確認)', 'ng'); busy(false); back(); return; }
       function go(en) { if (cur !== t) { busy(false); return; } confirmSendBody(t, en, hit.body, function (locked) { if (!locked) back(); }); }
       if (hit.en) { go(hit.en); return; }
       GSR().withSuccessHandler(function (r) {
@@ -880,8 +886,8 @@ function startClient(DATA) {
     sendTpl: sendTpl,
     declineNow: function (t) {
       return new Promise(function (ok, ng) { loadTpl(ok, ng); }).then(function (items) {
-        var hit = tplByName(items, function (n) { return String(n.name).indexOf('お断り') >= 0 && String(n.name).indexOf('US以外') >= 0; });
-        if (!hit) return { ok: false, message: 'テンプレ「お断り US以外」が見つかりません (シートの返信テンプレを確認)' };
+        var hit = tplByName(items, isDeclineTpl);
+        if (!hit) return { ok: false, message: 'テンプレ「Decline (Non-US)」が見つかりません (シートの返信テンプレを確認)' };
         return sendTpl(t, hit);
       }, function (e) { return { ok: false, message: '失敗: ' + (e && e.message ? e.message : e) }; });
     },

@@ -1,6 +1,6 @@
 // 画面の殻 (html / js / css / アイコン) を端末に覚えさせる。GAS への通信 (別のホスト) は覚えない。
 // 殻は「先にサーバーへ取りに行き、つながらない時だけ覚えたものを出す」(ZBook の sw.js と同じ)。版は tools/build-mail-pwa.js が中身から作る。
-var VERSION = 'mail-gas-95dcfd7d28';
+var VERSION = 'mail-gas-07ea03f604';
 var SHELL = ["./","app.js","app.css","pwa.css","pwa-shim.js","mail-gas.js","icon-180.png","icon-192.png","icon-192-green.png","icon-192-red.png","icon-512.png"];
 
 self.addEventListener('install', function (e) {
